@@ -101,7 +101,7 @@ typedef struct {
 	uint32_t live_run;
 	char live[UT_LIVE];
 	uint32_t nlive;
-	int level;                          /* the last window's tone level, in 0.1 dB */
+	int level;                          /* the last window's tone level, in 0.1 dBFS (-990: silence) */
 } ut_listener;
 
 void ut_listener_init(ut_listener *l, uint32_t rate);

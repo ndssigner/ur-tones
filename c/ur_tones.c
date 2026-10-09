@@ -893,8 +893,8 @@ static void detect(ut_listener *l, char *key, int16_t *level)
 	int ok = lo > 2 * lo2 && hi > 2 * hi2
 	         && 2 * (lo + hi) > (int64_t)total * n / 5
 	         && 100 * hi > lo && 100 * lo > hi;
-	uint64_t per = (uint64_t)(2 * (lo + hi) / n);
-	*level = (int16_t)db10(per ? per : 1);
+	/* the tone's level in dBFS: |X|^2 of a full-scale sine is (n/2 * 32768)^2 */
+	*level = (int16_t)(db10((uint64_t)(lo + hi > 0 ? lo + hi : 1)) - db10((uint64_t)n * n / 4 * 32768u * 32768u));
 	if (ok) *key = PAD[r][cc];
 }
 
