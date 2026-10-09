@@ -17,6 +17,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 FILES = [  # (path in the repository, name in the bundle)
     ("dist/ur-tones.html", "ur-tones.html"),
     ("SPEC.md", "SPEC.md"),
+    ("c/ur_tones.h", "c/ur_tones.h"),
+    ("c/ur_tones.c", "c/ur_tones.c"),
     ("LICENSE", "LICENSE"),
 ]
 
@@ -30,6 +32,7 @@ ur-tones.html    Web tool. Open it in a browser, offline. Paste a PSBT (from
                  (microphone or WAV file) and get the PSBT, a UR or a test seed
                  back. It cannot connect anywhere.
 SPEC.md          The specification, cables included.
+c/               The C library for small devices (no malloc, no floating point).
 SHA256SUMS       Check the files: sha256sum -c SHA256SUMS
 
 Borrador: no muevas con un formato en borrador la semilla de fondos reales.
@@ -39,6 +42,7 @@ ur-tones.html    Herramienta web. Ábrela en un navegador, sin conexión. Pega u
                  teléfono; escucha tonos (micrófono o archivo WAV) y recupera la
                  PSBT, un UR o una semilla de prueba. No puede conectarse.
 SPEC.md          La especificación, cables incluidos.
+c/               La librería en C para aparatos pequeños (sin malloc ni coma flotante).
 SHA256SUMS       Comprueba los ficheros: sha256sum -c SHA256SUMS
 """
 

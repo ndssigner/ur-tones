@@ -16,7 +16,8 @@ to keep a seed as a sound recording, or **key it in by hand** on any phone.
 - **Keypad mode** carries a seed as the digits of a Standard SeedQR, between
   `*` and `#`, with the 12 keys that every telephone has.
 
-The reference implementation is `reference/python/ur_tones.py`;
+The reference implementation is `reference/python/ur_tones.py` (and, for
+small devices, `c/ur_tones.c`: integers only, no allocation);
 `vectors/ur-tones-v0.json` has test vectors (public test seeds and testnet
 PSBTs only). From the [NDS-Signer](https://github.com/ndssigner/nds-signer)
 project, but meant for any wallet or signer.

@@ -339,6 +339,7 @@ const UrTones = (() => {
 		const n = data.length + PARITY;
 		// a byte of padding when the base-15 digits would leave 8 bits or more spare
 		if (15 * Math.ceil(8 * n / 15) - 8 * n >= 8) data = concat(data, Uint8Array.of(0));
+		if (data.length + PARITY > 255) throw new DecodeError("too long for one frame: use a multi-part UR");
 		return LEAD + SYNC + toTones(concat(data, rsEncode(data)), SYNC[1]);
 	}
 	const filler = (t, i) => [...KEYS].find((k) => k !== t[i - 1] && k !== t[i]);

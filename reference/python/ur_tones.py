@@ -337,6 +337,8 @@ def ur_to_frame(ur):
     # spare, so that the receiver can tell the codeword's length (SPEC §2.2)
     if 15 * -(-8 * (len(data) + PARITY) // 15) - 8 * (len(data) + PARITY) >= 8:
         data += b"\x00"
+        if len(data) + PARITY > 255:
+            raise ValueError("too long for one frame: use a multi-part UR")
     return LEAD + SYNC + to_tones(data + rs_encode(data), SYNC[-1])
 
 

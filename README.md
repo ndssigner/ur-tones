@@ -60,7 +60,13 @@ air-gapped device.
 
 - `SPEC.md`: the specification (draft v0).
 - `reference/python/ur_tones.py`: reference implementation, standard library
-  only; the frames and seeds also run on MicroPython (NDS-Signer).
+  only; the frames and seeds also run on MicroPython.
+- `c/ur_tones.{h,c}`: the same in C99 for small devices — frames, repairs,
+  keypad mode, seed URs and PIN, tone synthesis and a streaming receiver —
+  with no `malloc` and **no floating point** (integer Goertzel, a sine
+  table): about 12 KB of ARM code, for CPUs without an FPU like the
+  Nintendo DSi's (NDS-Signer). `tests/test_c.py` checks it against the
+  vectors and the Python reference, audio included, both ways.
 - `vectors/ur-tones-v0.json`: test vectors, public test seeds and testnet
   PSBTs only (`tools/gen_vectors.py`, cross-checked with the UR library
   SeedSigner bundles and with embit).
@@ -73,6 +79,7 @@ air-gapped device.
 
 ```bash
 python3 tests/test_reference.py      # the Python reference
+python3 tests/test_c.py              # the C library (needs cc)
 node web/test.mjs                    # the JavaScript (Node.js ≥ 18)
 node web/build.mjs                   # dist/ur-tones.html + its SHA-256
 python3 tools/bundle.py v0.1.0       # the release zip, reproducible

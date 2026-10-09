@@ -27,6 +27,10 @@ jobs:
           node-version: "22"
       - name: Python reference against the vectors (and audio)
         run: python3 tests/test_reference.py
+      - name: C library against the vectors and the reference (and audio)
+        run: python3 tests/test_c.py
+      - name: C library uses no floating point (CPUs without an FPU)
+        run: "! grep -nE '\\b(float|double)\\b' c/ur_tones.c c/ur_tones.h"
       - name: JavaScript against the vectors (and audio)
         run: node web/test.mjs
       - name: Build the web tool
