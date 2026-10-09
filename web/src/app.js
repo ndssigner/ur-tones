@@ -228,6 +228,30 @@
 		const progress = h("div", { class: "progress" }, h("div", {})), progressText = h("div", { class: "help" });
 		const result = h("div", {}), err = h("div", {});
 		const micBtn = h("button", { class: "btn" }, t.mic);
+		// optional recording of what the microphone hears, for bug reports:
+		// about 8 kHz, 16 bits, 10 minutes at most (about 10 MB)
+		const rec = { on: false, rate: 0, dec: 1, pend: [], chunks: [], n: 0, max: 0 };
+		const recInfo = h("span", { class: "help" });
+		const recSave = h("button", { class: "btn ghost small", disabled: "", on: { click: () => {
+			const all = new Float32Array(rec.n);
+			let o = 0;
+			for (const c of rec.chunks) { for (let i = 0; i < c.length; i++) all[o + i] = c[i] / 32768; o += c.length; }
+			download(TN.wav(all, rec.rate / rec.dec), "ur-tones-recording.wav", "audio/wav");
+		} } }, "💾 " + t.recSave);
+		const recBox = h("input", { type: "checkbox", on: { change: (e) => { rec.on = e.target.checked; } } });
+		function record(x) {
+			if (!rec.on || rec.n >= rec.max) return;
+			const d = rec.dec, all = rec.pend.concat(Array.from(x)), m = Math.floor(all.length / d), out = new Int16Array(m);
+			for (let i = 0; i < m; i++) {
+				let sum = 0;
+				for (let j = 0; j < d; j++) sum += all[i * d + j];
+				out[i] = Math.max(-32767, Math.min(32767, Math.round(sum / d * 32767)));
+			}
+			rec.pend = all.slice(m * d);
+			rec.chunks.push(out); rec.n += m;
+			recInfo.textContent = t.recLength(Math.round(rec.n / (rec.rate / d)));
+			recSave.disabled = false;
+		}
 		const pin = h("input", { class: "pin", autocomplete: "off", autocapitalize: "characters", spellcheck: "false", placeholder: "PIN",
 			on: { input: (e) => { L.pin = cleanPin(e.target.value); e.target.value = L.pin; } } });
 
@@ -296,7 +320,10 @@
 			const listener = newListener(mic.ctx.sampleRate);
 			const src = mic.ctx.createMediaStreamSource(mic.stream);
 			mic.proc = mic.ctx.createScriptProcessor(4096, 1, 1);
-			mic.proc.onaudioprocess = (e) => listener.push(e.inputBuffer.getChannelData(0));
+			Object.assign(rec, { rate: mic.ctx.sampleRate, dec: Math.max(1, Math.floor(mic.ctx.sampleRate / 8000)), pend: [], chunks: [], n: 0 });
+			rec.max = Math.floor(600 * rec.rate / rec.dec);
+			recSave.disabled = true; recInfo.textContent = "";
+			mic.proc.onaudioprocess = (e) => { const x = e.inputBuffer.getChannelData(0); listener.push(x); record(x); };
 			src.connect(mic.proc); mic.proc.connect(mic.ctx.destination);
 			micBtn.textContent = t.micStop;
 		});
@@ -318,6 +345,8 @@
 			h("div", { class: "row" }, micBtn, h("button", { class: "btn ghost", on: { click: () => wavInput.click() } }, t.openWav), wavInput),
 			err,
 			h("details", { class: "more" }, h("summary", { text: t.pinTitle }), h("p", { class: "help", text: t.pinHelp }), pin),
+			h("details", { class: "more" }, h("summary", { text: "🎙️ " + t.recTitle }), h("p", { class: "help", text: t.recHelp }),
+				h("label", { class: "row" }, recBox, t.recOn), h("div", { class: "row" }, recSave, recInfo)),
 			h("h3", { text: t.level }), h("div", { class: "meter" }, meter),
 			h("h3", { text: t.heard }), heard,
 			h("h3", { text: t.frames }), progress, progressText, list,

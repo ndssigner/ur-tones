@@ -69,9 +69,11 @@ After at least 300 ms of silence:
 `C B` is a **lead-in**: it gives the receiver time to settle, and may be
 lost. `A D` is the **sync**: a keypad cannot send it, so a receiver tells the
 modes apart. The **codeword** is a shortened Reed-Solomon codeword over
-GF(256) with **16 parity bytes** at the end, the same code as QR codes
-(primitive polynomial x⁸ + x⁴ + x³ + x² + 1, generator with roots α⁰ … α¹⁵).
-It repairs **8 wrong bytes**: any one misheard tone, and almost always two.
+GF(256) with **32 parity bytes** at the end, the same code as QR codes
+(primitive polynomial x⁸ + x⁴ + x³ + x² + 1, generator with roots α⁰ … α³¹).
+It repairs **16 wrong bytes**: any two misheard tones, and almost always
+four — a noisy room (a fan, a television) costs a few. Decoding it is light
+work even for a modest device: at most 255 bytes, and 32 syndromes.
 Its data bytes are:
 
 | Bytes | Field |
@@ -83,7 +85,7 @@ Its data bytes are:
 | L | body |
 | (1) | a zero byte, when §2.2 needs it |
 
-The codeword is at most 255 bytes, so a body has at most 235 bytes (less
+The codeword is at most 255 bytes, so a body has at most 219 bytes (less
 with a named type). A frame that does not decode is discarded; in a
 multi-part message the next frames make up for it (§2.4).
 
@@ -136,7 +138,7 @@ its CRC-32 — and hands it to any UR decoder. Messages too big for one frame
 are sent as multi-part URs, with UR's fountain codes: the sender plays parts
 in a loop, mixed parts included, until the receiver has enough; a lost frame
 costs one frame, not the whole message. Recommended fragment length: 100
-bytes (about 17 s per frame by cable, 45 s through the air).
+bytes (about 19 s per frame by cable, 51 s through the air).
 
 A seed goes as `crypto-seed` or `seed`.
 
@@ -279,19 +281,22 @@ a PIN** (§4), and a cable is still better.
 What the reference implementation does, tuned on a simulated channel (a
 small speaker, a room's echo, noise; `tests/acoustic.py`) and on recordings:
 
-1. Every 10 ms, measure the eight frequencies over the last 25 ms with the
+1. Bring the audio down to about 8 kHz (the tones are all under 1.7 kHz):
+   at 44.1 or 48 kHz, average every 5 or 6 samples. Four to six times less
+   work, which matters on a modest phone or a game console.
+2. Every 10 ms, measure the eight frequencies over the last 25 ms with the
    Goertzel algorithm (or any narrow band filter).
-2. That moment holds a key when the strongest low and the strongest high
+3. That moment holds a key when the strongest low and the strongest high
    frequency are each at least **twice as strong** as the runner-up in their
    group, together carry at least a fifth of the energy, and are within
    20 dB of each other. Stricter tests (6 dB, 8 dB of twist) fail through
    the air.
-3. A tone is one key for at least 30 ms. A key that drops out for up to
+4. A tone is one key for at least 30 ms. A key that drops out for up to
    30 ms and comes back is the same tone (flicker).
-4. Echoes: a room keeps a tone ringing after it stops, weaker. The same key
+5. Echoes: a room keeps a tone ringing after it stops, weaker. The same key
    again is a new tone only if it comes back nearly as loud as before
    (within 6 dB) after a dip, or after a silence; a weaker return is the echo.
-5. Group the tones by the silences between them (§1.1). A group that starts
+6. Group the tones by the silences between them (§1.1). A group that starts
    with `*` and goes on with digits is keypad mode and ends at `#`, whatever
    the silences. Any other group is a data frame: drop the tones that repeat
    the one before (echoes, §2.2), find the sync among its first tones, and

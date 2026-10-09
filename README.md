@@ -18,9 +18,9 @@ backs seeds up as sequences of things.
 ## In short
 
 - **Data mode**: a UR part per frame — lead-in, sync, a Reed-Solomon codeword
-  (16 parity bytes) written in base 15 as the step from one tone to the
+  (32 parity bytes) written in base 15 as the step from one tone to the
   next, so a tone **never follows itself**: an echo cannot pass for a second
-  tone. One misheard tone is always repaired, two almost always, and one
+  tone. Two misheard tones are always repaired, four almost always, and one
   lost or extra tone too. Long PSBTs go as multi-part URs with their fountain
   codes: a lost frame costs one frame.
 - **Keypad mode**: a seed as `*`, the Standard SeedQR digits (four per word),
@@ -29,7 +29,7 @@ backs seeds up as sequences of things.
   different seed. Transactions are not encrypted (they give no access to
   funds).
 - **Pace**: by cable, 40 ms tones with 20 ms of silence (about 16 tones per
-  second: a 450-byte PSBT in about 1½ minutes); through the air, 80 + 80 ms.
+  second: a 450-byte PSBT in under 2 minutes); through the air, 80 + 80 ms.
 - **Cables**: which ones, levels, and the Nintendo DSi's odd socket: see
   [SPEC.md §5](SPEC.md#5-cables).
 
@@ -78,8 +78,9 @@ node web/build.mjs                   # dist/ur-tones.html + its SHA-256
 python3 tools/bundle.py v0.1.0       # the release zip, reproducible
 ```
 
-Recordings help most: if the tool misses tones in your setup, a WAV of it
-(with a **test** seed or a testnet PSBT) is the best bug report.
+Recordings help most: if the tool misses tones in your setup, record what
+it hears (*Listen → Record what is heard*) with a **test** seed or a testnet
+PSBT, and attach the WAV to an issue.
 
 ## Donate
 

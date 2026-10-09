@@ -18,7 +18,7 @@ FORMAT_VERSION = 0
 KEYS = "0123456789ABCD*#"  # nibble value -> key
 LEAD = "CB"  # lead-in: lets the receiver settle; may be lost
 SYNC = "AD"
-PARITY = 16  # Reed-Solomon parity bytes per frame: repairs 8 wrong bytes
+PARITY = 32  # Reed-Solomon parity bytes per frame: repairs 16 wrong bytes
 KIND_SINGLE, KIND_PART = 0, 1
 UR_TYPES = ["", "crypto-psbt", "psbt", "crypto-seed", "seed", "crypto-account",
             "account-descriptor", "crypto-output", "output-descriptor", "bytes",
@@ -106,7 +106,8 @@ def rs_correct(codewords, nsym):
             continue
         coef = _div(d, b)
         shifted = [0] * m + [_mul(coef, c) for c in prev]
-        new = [x ^ y for x, y in zip(lam + [0] * len(shifted), shifted + [0] * len(lam))]
+        size = max(len(lam), len(shifted))
+        new = [(lam[j] if j < len(lam) else 0) ^ (shifted[j] if j < len(shifted) else 0) for j in range(size)]
         if 2 * L <= i:
             prev, L, b, m = lam, i + 1 - L, d, 1
         else:
@@ -580,11 +581,22 @@ def _short_run(detections, i, k, min_hops):
     return n < min_hops
 
 
+def decimate(samples, rate):
+    """Down to about 8 kHz, averaging every d samples (d = rate // 8000):
+    plenty for tones under 1.7 kHz, and 4 to 6 times less work at 44.1 or
+    48 kHz (modest phones, and the DSi)."""
+    d = max(1, int(rate // 8000))
+    if d == 1:
+        return samples, rate
+    return [sum(samples[i:i + d]) / d for i in range(0, len(samples) - d + 1, d)], rate / d
+
+
 def listen(samples, rate):
     """Groups of tones (strings), split by silences longer than 225 ms (SPEC
     §1.1). A group that starts with * and then digits is keypad mode and runs
     to its #, whatever the silences. In a data frame a tone never follows
     itself, so a repeat there is an echo, and is dropped."""
+    samples, rate = decimate(samples, rate)
     tones = segment(detect(samples, rate))
     hop_ms = 1000 * int(rate * HOP_S) / rate
     groups, current, last_end = [], "", None

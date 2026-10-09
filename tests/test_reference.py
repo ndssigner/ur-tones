@@ -74,12 +74,19 @@ def main():
             check(st.ur_to_frame(ur) == frame, "frame " + name)
             check(st.frame_to_ur(frame) == (ur, 0), "frame back " + name)
             n = len(frame) - 4
-            # any one misheard tone is repaired; two, almost always
+            # any one misheard tone is repaired; two, always here; four, almost always
             check(all(st.frame_to_ur(substitute(frame, [i], rng))[0] == ur for i in range(n)),
                   "every single misheard tone repaired " + name)
-            two = sum(1 for _ in range(20) if not raises(st.frame_to_ur, f2 := substitute(frame, rng.sample(range(n), 2), rng))
-                      and st.frame_to_ur(f2)[0] == ur)
-            check(two >= 18, "two misheard tones repaired %d/20 %s" % (two, name))
+            for wrong, need in ((2, 20), (4, 18)):
+                got = 0
+                for _ in range(20):
+                    f2 = substitute(frame, rng.sample(range(n), wrong), rng)
+                    got += not raises(st.frame_to_ur, f2) and st.frame_to_ur(f2)[0] == ur
+                check(got >= need, "%d misheard tones repaired %d/20 %s" % (wrong, got, name))
+            # a lost tone and a misheard one, together
+            i, j = sorted(rng.sample(range(4, len(frame) - 1), 2))
+            f3 = substitute(frame, [j - 4], rng)
+            check(st.frame_to_ur(f3[:i] + f3[i + 1:])[0] == ur, "a lost and a misheard tone " + name)
             # one lost or one extra tone anywhere is repaired; the lead-in may be lost
             for i in rng.sample(range(4, len(frame)), 5):
                 check(st.frame_to_ur(frame[:i] + frame[i + 1:])[0] == ur, "lost tone %d %s" % (i, name))

@@ -12,7 +12,7 @@ const UrTones = (() => {
 	const KEYS = "0123456789ABCD*#";
 	const LEAD = "CB"; // lead-in: lets the receiver settle; may be lost
 	const SYNC = "AD";
-	const PARITY = 16; // Reed-Solomon parity bytes: repairs 8 wrong bytes
+	const PARITY = 32; // Reed-Solomon parity bytes: repairs 16 wrong bytes
 	const KIND_SINGLE = 0, KIND_PART = 1;
 	const UR_TYPES = ["", "crypto-psbt", "psbt", "crypto-seed", "seed", "crypto-account",
 		"account-descriptor", "crypto-output", "output-descriptor", "bytes", "crypto-hdkey", "hdkey"];
@@ -555,13 +555,30 @@ const UrTones = (() => {
 	class Listener {
 		constructor(rate, { onGroup = () => {}, onLive = () => {}, onLevel = () => {} } = {}) {
 			Object.assign(this, { rate, onGroup, onLive, onLevel });
-			this.d = makeDetector(rate);
-			this.hopMs = 1000 * this.d.hop / rate;
+			// down to about 8 kHz, averaging every `dec` samples, as
+			// ur_tones.decimate(): 4 to 6 times less work at 44.1 or 48 kHz
+			this.dec = Math.max(1, Math.floor(rate / 8000));
+			this.pend = new Float32Array(0);
+			this.d = makeDetector(rate / this.dec);
+			this.hopMs = 1000 * this.d.hop * this.dec / rate;
 			this.buf = new Float32Array(0);
 			this.det = []; this.silent = 0; this.liveKey = null; this.liveRun = 0;
 			this.current = ""; this.lastEnd = null; this.offset = 0;
 		}
-		push(samples) {
+		push(input) {
+			let samples = input;
+			if (this.dec > 1) {
+				const all = new Float32Array(this.pend.length + input.length);
+				all.set(this.pend); all.set(input, this.pend.length);
+				const m = Math.floor(all.length / this.dec);
+				samples = new Float32Array(m);
+				for (let i = 0; i < m; i++) {
+					let sum = 0;
+					for (let j = 0; j < this.dec; j++) sum += all[i * this.dec + j];
+					samples[i] = sum / this.dec;
+				}
+				this.pend = all.slice(m * this.dec);
+			}
 			const buf = new Float32Array(this.buf.length + samples.length);
 			buf.set(this.buf); buf.set(samples, this.buf.length);
 			let start = 0;
