@@ -8,7 +8,7 @@
 	const $ = (id) => document.getElementById(id);
 	const st = {
 		lang: (navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en",
-		screen: "home",
+		screen: "send",
 		send: { text: "", mode: "data", pin: "", made: "", pace: "cable" },
 	};
 	const T = () => UR_TONES_TEXT[st.lang];
@@ -39,11 +39,11 @@
 		if (!fingerprints.has(key)) fingerprints.set(key, S.fingerprint(entropy));
 		return fingerprints.get(key);
 	}
-	// The fingerprint, big, filled in a moment later so the page does not wait for it
+	// The fingerprint, filled in a moment later so the page does not wait for it
 	function fingerprintBox(entropy, help) {
-		const t = T(), value = h("div", { class: "fp-value", text: "…" });
+		const t = T(), value = h("b", { class: "fp-value", text: "…" });
 		setTimeout(() => { value.textContent = fingerprintOf(entropy); }, 30);
-		return h("div", { class: "fp" }, h("div", { class: "fp-label", text: t.fingerprint }), value, h("p", { class: "help", text: help }));
+		return h("div", { class: "fp" }, h("span", { class: "label", text: t.fingerprint }), value, h("span", { class: "hint", text: help }));
 	}
 	// A made-up PIN (SPEC §4): 12 characters without 0/O or 1/I, 60 bits; 32 divides 256, so no bias.
 	// Shown in groups of 4, typed without the spaces. Shorter PINs are accepted, with a warning.
@@ -54,14 +54,14 @@
 	// (st.pin, and st.made: the PIN made up here, shown big until it is edited)
 	function pinField(st, onChange) {
 		const t = T();
-		const shown = h("div", { class: "pin-made" });
+		const shown = h("div", {});
 		const show = () => shown.replaceChildren(...(st.pin && st.pin === st.made
-			? [h("div", { class: "pin-big", text: groups(st.pin) }), h("p", { class: "help", text: t.pinMadeHelp })]
-			: st.pin && st.pin.length < PIN_LENGTH ? [h("p", { class: "help warn", text: t.pinShort })] : []));
+			? [h("div", { class: "pin-big", text: groups(st.pin) }), h("div", { class: "hint", text: t.pinMadeHelp })]
+			: st.pin && st.pin.length < PIN_LENGTH ? [h("div", { class: "hint warn", text: t.pinShort })] : []));
 		const input = h("input", { class: "pin", autocomplete: "off", autocapitalize: "characters", spellcheck: "false", placeholder: "PIN", value: st.pin,
 			on: { input: (e) => { st.pin = cleanPin(e.target.value); e.target.value = st.pin; show(); },
 				change: () => onChange && onChange() } });
-		const dice = h("button", { class: "btn ghost", on: { click: () => {
+		const dice = h("button", { class: "btn ghost", title: t.pinMake, on: { click: () => {
 			st.pin = st.made = makePin();
 			input.value = st.pin;
 			show();
@@ -95,6 +95,8 @@
 
 	// ---- what to send ------------------------------------------------
 	const PSBT_MAGIC = [0x70, 0x73, 0x62, 0x74, 0xff];
+	// the BIP-39 test vector everyone knows: never holds funds
+	const TEST_SEED = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 	function parseInput(text) {
 		const s = text.trim();
 		if (!s) return null;
@@ -139,6 +141,7 @@
 		if (player.source) { player.source.onended = null; try { player.source.stop(); } catch (e) { /* stopped */ } }
 		player.source = null;
 	}
+	// view: { status, keys, bar } of the send screen's live panel
 	function play(input, sendSt, view) {
 		stopPlaying();
 		player.ctx = player.ctx || new AudioContext();
@@ -162,36 +165,42 @@
 			const t0 = player.ctx.currentTime + 0.05;
 			src.start(t0);
 			player.source = src;
-			view.status.textContent = T().playing(n, total);
+			view.status.textContent = T().playing(((n - 1) % total) + 1, total);
 			const spans = [...frame].map((k) => h("span", { text: k }));
 			view.keys.replaceChildren(...spans);
+			let last = -1;
 			clearInterval(player.timer);
 			player.timer = setInterval(() => {
 				const i = Math.floor(((player.ctx.currentTime - t0) * 1000 - pace.pause) / (pace.tone + pace.gap));
-				spans.forEach((s, j) => s.classList.toggle("on", j === i));
+				if (i === last) return;
+				if (spans[last]) spans[last].classList.remove("on");
+				last = i;
+				if (spans[i]) { spans[i].classList.add("on"); spans[i].scrollIntoView({ block: "nearest" }); }
+				view.bar.style.width = Math.max(0, Math.min(100, 100 * i / frame.length)) + "%";
 			}, 40);
 		};
 		next();
 	}
 
-	// ---- screens -----------------------------------------------------
-	function home() {
-		const t = T();
-		const choice = (big, title, help, screen) => h("button", { class: "choice", on: { click: () => go(screen) } },
-			h("div", { class: "big", text: big }), h("b", { text: title }), h("span", { text: help }));
-		return h("div", {},
-			h("div", { class: "choices" },
-				choice("🔊", t.send, t.sendHelp, "send"),
-				choice("👂", t.listen, t.listenHelp, "listen"),
-				choice("🔌", t.cables, t.cablesHelp, "cables")));
+	// ---- small building blocks ----------------------------------------
+	const field = (label, ...children) => h("div", { class: "field" }, h("div", { class: "label", text: label }), ...children);
+	// segmented control: [value, label, help]; the chosen one's help below it
+	function seg(items, value, set) {
+		const help = (items.find(([v]) => v === value) || [])[2];
+		return h("div", {}, h("div", { class: "seg" }, items.map(([v, label]) =>
+			h("button", { class: v === value ? "on" : "", on: { click: () => set(v) } }, label))),
+			help ? h("div", { class: "hint", text: help }) : null);
 	}
+	const bar = () => h("div", { class: "bar-track" }, h("div", {}));
+	const panel = (...children) => h("section", { class: "panel" }, ...children);
 
+	// ---- send ---------------------------------------------------------
 	function sendScreen() {
 		const t = T(), s = st.send;
-		const view = { status: h("div", { class: "status" }), keys: h("div", { class: "keys" }) };
-		const info = h("div", { class: "status" });
-		const options = h("div", {});
-		const area = h("textarea", { class: "seed", spellcheck: "false", autocomplete: "off", placeholder: "cHNidP8BA… / ur:crypto-psbt/… / abandon ability …" });
+		const view = { status: h("div", { class: "status", text: "" }), keys: h("div", { class: "keys" }), bar: h("div", {}) };
+		const info = h("div", { class: "detected" });
+		const options = h("div", { class: "stack" }), live = h("div", { class: "stack" });
+		const area = h("textarea", { class: "input", rows: 4, spellcheck: "false", autocomplete: "off", placeholder: "cHNidP8BA… · ur:crypto-psbt/… · abandon ability …" });
 		area.value = s.text;
 		const fileInput = h("input", { type: "file", class: "hidden", on: { change: async (e) => {
 			const f = e.target.files[0];
@@ -202,52 +211,59 @@
 		} } });
 		function update() {
 			stopPlaying();
-			view.keys.replaceChildren(); view.status.textContent = "";
 			const input = parseInput(s.text);
-			info.className = "status " + (input && input.kind !== "bad" ? "ok" : "bad");
+			info.className = "detected " + (!input ? "" : input.kind !== "bad" ? "ok" : "bad");
 			info.textContent = !input ? "" : input.kind === "psbt" ? t.detected.psbt(input.psbt.length, input.parts)
 				: input.kind === "urs" ? t.detected.urs(input.urs.length, input.type)
 				: input.kind === "seed" ? t.detected.seed(input.words) : t.detected.bad;
-			options.replaceChildren();
-			if (!input || input.kind === "bad") return;
-			const seg = (items, value, set) => h("div", { class: "seg" }, items.map(([v, label, help]) =>
-				h("button", { class: v === value ? "on" : "", on: { click: () => { set(v); update(); } } }, label, h("small", { text: help }))));
-			if (input.kind === "seed") {
-				const pin = pinField(s, () => update());
-				options.append(fingerprintBox(input.entropy, t.fingerprintSend), h("h3", { text: t.seedMode }),
-					seg([["data", t.modeData, t.modeDataHelp], ["keypad", t.modeKeypad, t.modeKeypadHelp]], s.mode, (v) => { s.mode = v; }),
-					h("h3", { text: t.pinTitle }), h("p", { class: "help", text: t.pinHelp }), pin);
+			options.replaceChildren(); live.replaceChildren();
+			if (!input || input.kind === "bad") {
+				live.append(h("div", { class: "empty" }, h("div", { text: t.inputHint }),
+					h("button", { class: "btn ghost small", on: { click: () => { s.text = area.value = TEST_SEED; update(); } } }, t.tryTestSeed)));
+				return;
 			}
-			options.append(h("h3", { text: t.pace }),
-				seg([["cable", t.paceCable, t.paceCableHelp], ["air", t.paceAir, t.paceAirHelp]], s.pace, (v) => { s.pace = v; }));
-			if (input.kind === "seed" && s.pace === "air") options.append(h("div", { class: s.pin ? "note" : "error", text: s.pin ? t.airSeedPin : t.airSeed }));
+			const again = (fn) => (v) => { fn(v); update(); };
+			if (input.kind === "seed") {
+				options.append(seedAlert(),
+					field(t.seedMode, seg([["data", t.modeData, t.modeDataHelp], ["keypad", t.modeKeypad, t.modeKeypadHelp]], s.mode, again((v) => { s.mode = v; }))),
+					field(t.pin, pinField(s, () => update()), h("div", { class: "hint", text: t.pinHint })));
+			}
+			if (!(input.kind === "seed" && s.mode === "keypad"))
+				options.append(field(t.pace, seg([["cable", t.paceCable, t.paceCableHelp], ["air", t.paceAir, t.paceAirHelp]], s.pace, again((v) => { s.pace = v; }))));
+			if (input.kind === "seed" && s.pace === "air" && s.mode !== "keypad")
+				options.append(h("div", { class: s.pin ? "note" : "alert", text: s.pin ? t.airSeedPin : t.airSeed }));
+
 			const pace = paceFor(input, s), gen = frames(input, s);
 			const round = Array.from({ length: roundLength(input) }, () => gen.next().value);
 			const secs = round.reduce((a, f) => a + f.length * (pace.tone + pace.gap) + 2 * pace.pause, 0) / 1000;
-			options.append(h("p", { class: "help", text: t.duration(secs) }));
+			view.status.textContent = t.ready;
+			view.keys.replaceChildren(...[...round[0]].map((k) => h("span", { text: k })));
+			view.bar.style.width = "0";
+			live.append(
+				h("div", { class: "row" },
+					h("button", { class: "btn big", on: { click: () => play(input, s, view) } }, t.play),
+					h("button", { class: "btn ghost big", on: { click: () => { stopPlaying(); view.status.textContent = t.ready; view.bar.style.width = "0"; } } }, t.stop),
+					h("span", { class: "meta", text: t.duration(secs) }),
+					h("button", { class: "btn ghost small push", title: t.wavRound, on: { click: () => {
+						const extra = input.kind === "psbt" && input.parts > 1 ? Math.ceil(input.parts / 2) + 1 : 0;
+						const g = frames(input, s), list = Array.from({ length: round.length + extra }, () => g.next().value);
+						download(TN.wav(TN.render(list, 44100, pace.tone, pace.gap, 2 * pace.pause), 44100), "ur-tones.wav", "audio/wav");
+					} } }, t.saveWav)),
+				input.kind === "seed" ? fingerprintBox(input.entropy, t.fingerprintSend) : null,
+				view.status, h("div", { class: "bar-track" }, view.bar), view.keys);
 			if (input.kind === "seed" && s.mode === "keypad") {
 				const digits = round[0].slice(1, -1).match(/.{4}/g);
-				options.append(h("p", { class: "help", text: t.keyByHand }),
+				live.append(h("div", { class: "hint", text: t.keyByHand }),
 					h("div", { class: "words" }, digits.map((d, i) => h("div", {}, h("span", { text: String(i + 1) }), d))));
 			}
-			options.append(h("div", { class: "row" },
-				h("button", { class: "btn", on: { click: () => play(input, s, view) } }, t.play),
-				h("button", { class: "btn ghost", on: { click: () => { stopPlaying(); view.status.textContent = ""; } } }, t.stop),
-				h("button", { class: "btn ghost", title: t.wavRound, on: { click: () => {
-					const extra = input.kind === "psbt" && input.parts > 1 ? Math.ceil(input.parts / 2) + 1 : 0;
-					const g = frames(input, s), list = Array.from({ length: round.length + extra }, () => g.next().value);
-					download(TN.wav(TN.render(list, 44100, pace.tone, pace.gap, 2 * pace.pause), 44100), "ur-tones.wav", "audio/wav");
-				} } }, t.saveWav)), view.status, view.keys);
 		}
 		area.addEventListener("input", () => { s.text = area.value; update(); });
-		const card = h("div", { class: "card" },
-			h("h2", { text: "🔊 " + t.send }),
-			h("h3", { text: t.pasteTitle }), h("p", { class: "help", text: t.pasteHelp }), area,
-			h("div", { class: "row" }, h("button", { class: "btn ghost small", on: { click: () => fileInput.click() } }, t.openFile), fileInput),
-			info, options,
-			h("div", { class: "nav" }, h("button", { class: "btn ghost", on: { click: () => go("home") } }, t.home)));
 		update();
-		return card;
+		return h("div", { class: "tool" },
+			panel(field(t.input, area,
+				h("div", { class: "row" }, info, h("button", { class: "btn ghost small push", on: { click: () => fileInput.click() } }, t.openFile), fileInput)),
+				options),
+			panel(live));
 	}
 
 	// ---- listening -----------------------------------------------------
@@ -266,20 +282,21 @@
 	function listenScreen() {
 		const t = T();
 		const L = { decoder: null, done: false, pin: "", made: "" };
-		const meter = h("div", {}), heard = h("div", { class: "keys heard" }), list = h("div", { class: "frames" });
-		const progress = h("div", { class: "progress" }, h("div", {})), progressText = h("div", { class: "help" });
+		const meter = h("div", {}), levelText = h("span", { class: "meta", text: "" });
+		const heard = h("div", { class: "heard" }), list = h("div", { class: "frames" });
+		const progress = h("div", {}), progressText = h("span", { class: "meta", text: "" });
 		const result = h("div", {}), err = h("div", {});
-		const micBtn = h("button", { class: "btn" }, t.mic), micState = h("div", { class: "help" });
+		const micBtn = h("button", { class: "btn big" }, t.mic), micState = h("div", { class: "status", text: t.idle });
 		// optional recording of what the microphone hears, for bug reports:
 		// about 8 kHz, 16 bits, 10 minutes at most (about 10 MB)
 		const rec = { on: false, rate: 0, dec: 1, pend: [], chunks: [], n: 0, max: 0 };
-		const recInfo = h("span", { class: "help" });
+		const recInfo = h("span", { class: "meta" });
 		const recSave = h("button", { class: "btn ghost small", disabled: "", on: { click: () => {
 			const all = new Float32Array(rec.n);
 			let o = 0;
 			for (const c of rec.chunks) { for (let i = 0; i < c.length; i++) all[o + i] = c[i] / 32768; o += c.length; }
 			download(TN.wav(all, rec.rate / rec.dec), "ur-tones-recording.wav", "audio/wav");
-		} } }, "💾 " + t.recSave);
+		} } }, t.recSave);
 		const recBox = h("input", { type: "checkbox", on: { change: (e) => { rec.on = e.target.checked; } } });
 		function record(x) {
 			if (!rec.on || rec.n >= rec.max) return;
@@ -298,30 +315,34 @@
 
 		function addFrame(ok, text) {
 			list.prepend(h("div", { class: ok ? "ok" : "bad", text }));
-			while (list.children.length > 8) list.lastChild.remove();
+			while (list.children.length > 12) list.lastChild.remove();
 		}
-		function finish(node) { L.done = true; stopMic(); micBtn.textContent = t.mic; micState.textContent = ""; result.replaceChildren(node); result.scrollIntoView({ behavior: "smooth" }); }
+		function finish(node) {
+			L.done = true; stopMic(); micBtn.textContent = t.mic; micState.className = "status"; micState.textContent = t.idle;
+			result.replaceChildren(node);
+			result.scrollIntoView({ behavior: "smooth", block: "nearest" });
+		}
+		const done = (title, ...body) => h("div", { class: "result" }, h("div", { class: "result-title", text: "✓ " + title }), ...body);
 		function gotMessage(type, cbor, ur) {
 			if (type === "crypto-psbt" || type === "psbt") {
 				const psbt = TN.cborToPsbt(cbor), b64 = toBase64(psbt);
-				const out = h("textarea", { class: "seed", readonly: "" }); out.value = b64;
-				finish(h("div", { class: "card done" }, h("h2", { text: t.gotPsbt }), out,
+				const out = h("textarea", { class: "input mono", rows: 4, readonly: "" }); out.value = b64;
+				finish(done(t.gotPsbt, out,
 					h("div", { class: "row" }, copyButton(() => b64),
 						h("button", { class: "btn ghost", on: { click: () => download(psbt, "transaction.psbt", "application/octet-stream") } }, t.savePsbt)),
-					h("p", { class: "help", text: t.toSparrow })));
+					h("div", { class: "hint", text: t.toSparrow })));
 			} else if ((type === "crypto-seed" || type === "seed") && ur) {
 				gotSeed(TN.urToSeed(ur, L.pin || null));
 			} else {
-				const out = h("textarea", { class: "seed", readonly: "" }); out.value = ur;
-				finish(h("div", { class: "card done" }, h("h2", { text: t.gotUR }), out, h("div", { class: "row" }, copyButton(() => ur))));
+				const out = h("textarea", { class: "input mono", rows: 3, readonly: "" }); out.value = ur;
+				finish(done(t.gotUR, out, h("div", { class: "row" }, copyButton(() => ur))));
 			}
 		}
 		function gotSeed(entropy) {
 			const words = S.entropyToMnemonic(entropy).split(" ");
-			finish(h("div", { class: "card done" }, h("h2", { text: t.gotSeed }), h("p", { text: t.seedWords }),
-				fingerprintBox(entropy, t.fingerprintReceive),
+			finish(done(t.gotSeed, seedAlert(), fingerprintBox(entropy, t.fingerprintReceive),
 				h("div", { class: "words" }, words.map((w, i) => h("div", {}, h("span", { text: String(i + 1) }), w))),
-				L.pin ? h("p", { class: "help", text: t.pinApplied }) : null));
+				L.pin ? h("div", { class: "hint", text: t.pinApplied }) : null));
 		}
 		function onGroup(g) {
 			if (L.done) return;
@@ -332,35 +353,41 @@
 					gotSeed(e);
 				} else {
 					const f = TN.frameToUR(g);
-					addFrame(true, t.frameOk(f.corrected) + " " + f.ur.slice(0, 40) + "…");
+					addFrame(true, t.frameOk(f.corrected) + "  " + f.ur.slice(0, 48) + "…");
 					if (f.kind === 0) return gotMessage(f.type, f.body, f.ur);
 					const p = TN.parsePart(f.body);
 					const e = L.decoder && L.decoder.expected;
 					if (!L.decoder || (e && (e.seqLen !== p.seqLen || e.checksum !== p.checksum))) { L.decoder = new TN.FountainDecoder(); L.type = f.type; }
 					L.decoder.receive(f.body);
-					progress.firstChild.style.width = Math.round(100 * L.decoder.progress()) + "%";
+					progress.style.width = Math.round(100 * L.decoder.progress()) + "%";
 					progressText.textContent = t.progress(L.decoder.simple.size, p.seqLen);
 					if (L.decoder.result) gotMessage(L.type, L.decoder.result, null);
 				}
-			} catch (e) { addFrame(false, t.frameBad(e.message) + " " + g.slice(0, 20)); }
+			} catch (e) { addFrame(false, t.frameBad(e.message) + "  " + g.slice(0, 24)); }
 		}
 		const newListener = (rate) => new TN.Listener(rate, {
 			onGroup,
-			onLive: (k) => { heard.textContent = (heard.textContent + k).slice(-120); },
-			onLevel: (db) => { meter.style.width = Math.max(0, Math.min(100, (db + 70) * 1.6)) + "%"; },
+			onLive: (k) => { heard.textContent = (heard.textContent + k).slice(-160); },
+			onLevel: (db) => {
+				meter.style.width = Math.max(0, Math.min(100, (db + 70) * 1.6)) + "%";
+				levelText.textContent = Math.round(db) + " dB";
+			},
 		});
-		function reset() { L.decoder = null; L.done = false; result.replaceChildren(); list.replaceChildren(); heard.textContent = ""; progressText.textContent = ""; progress.firstChild.style.width = "0"; err.replaceChildren(); }
+		function reset() {
+			L.decoder = null; L.done = false; result.replaceChildren(); list.replaceChildren(); heard.textContent = "";
+			progressText.textContent = ""; progress.style.width = "0"; err.replaceChildren();
+		}
 
 		micBtn.addEventListener("click", async () => {
-			if (mic.stream) { stopMic(); micBtn.textContent = t.mic; micState.textContent = ""; return; }
+			if (mic.stream) { stopMic(); micBtn.textContent = t.mic; micState.className = "status"; micState.textContent = t.idle; return; }
 			reset();
 			micBtn.disabled = true;
-			micState.className = "help"; micState.textContent = t.micStarting;
+			micState.className = "status"; micState.textContent = t.micStarting;
 			try {
 				mic.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
 			} catch (e) {
-				micBtn.disabled = false; micState.textContent = "";
-				err.replaceChildren(h("div", { class: "error", text: t.micDenied })); return;
+				micState.textContent = t.idle;
+				err.replaceChildren(h("div", { class: "alert", text: t.micDenied })); return;
 			} finally { micBtn.disabled = false; }
 			if (!micBtn.isConnected) { stopMic(); return; }   // left this screen meanwhile
 			mic.ctx = new AudioContext();
@@ -376,7 +403,7 @@
 				const x = e.inputBuffer.getChannelData(0);
 				if (!ready && x.some((v) => v !== 0)) {   // the first real sound: from now on nothing is lost
 					ready = true;
-					micState.className = "note"; micState.textContent = t.micReady;
+					micState.className = "status live"; micState.textContent = t.micReady;
 				}
 				listener.push(x); record(x);
 			};
@@ -391,74 +418,83 @@
 				const { samples, rate } = TN.readWav(new Uint8Array(await f.arrayBuffer()));
 				const l = newListener(rate);
 				l.push(samples); l.flush();
-			} catch (x) { err.replaceChildren(h("div", { class: "error", text: x.message })); }
+			} catch (x) { err.replaceChildren(h("div", { class: "alert", text: x.message })); }
 			e.target.value = "";
 		} } });
 
-		return h("div", { class: "card" },
-			h("h2", { text: "👂 " + t.listen }),
-			h("p", { class: "help", text: t.micHelp }),
-			h("div", { class: "row" }, micBtn, h("button", { class: "btn ghost", on: { click: () => wavInput.click() } }, t.openWav), wavInput),
-			micState,
-			err,
-			h("details", { class: "more" }, h("summary", { text: t.pinTitle }), h("p", { class: "help", text: t.pinHelp }), pin),
-			h("details", { class: "more" }, h("summary", { text: "🎙️ " + t.recTitle }), h("p", { class: "help", text: t.recHelp }),
-				h("label", { class: "row" }, recBox, t.recOn), h("div", { class: "row" }, recSave, recInfo)),
-			h("h3", { text: t.level }), h("div", { class: "meter" }, meter),
-			h("h3", { text: t.heard }), heard,
-			h("h3", { text: t.frames }), progress, progressText, list,
-			result,
-			h("div", { class: "nav" }, h("button", { class: "btn ghost", on: { click: () => go("home") } }, t.home)));
+		return h("div", { class: "tool" },
+			panel(
+				h("div", { class: "row" }, micBtn, h("button", { class: "btn ghost small push", on: { click: () => wavInput.click() } }, t.openWav), wavInput),
+				micState, h("div", { class: "hint", text: t.micHint }), err,
+				field(t.pin, pin, h("div", { class: "hint", text: t.pinHint })),
+				h("details", { class: "more" }, h("summary", { text: t.recTitle }), h("div", { class: "hint", text: t.recHelp }),
+					h("label", { class: "row check" }, recBox, t.recOn), h("div", { class: "row" }, recSave, recInfo))),
+			panel(
+				h("div", { class: "row between" }, h("span", { class: "label", text: t.level }), levelText),
+				h("div", { class: "bar-track meter" }, meter),
+				field(t.heard, heard),
+				h("div", { class: "row between" }, h("span", { class: "label", text: t.message }), progressText),
+				h("div", { class: "bar-track" }, progress),
+				field(t.frames, list),
+				result));
 	}
 
-	const textScreen = (title, paras) => () => h("div", { class: "card" }, h("h2", { text: title() }),
-		...paras().map((p) => Array.isArray(p) ? h("div", { class: "note" }, h("b", { text: p[0] }), h("div", { text: p[1] })) : h("p", { text: p })),
-		h("div", { class: "nav" }, h("button", { class: "btn ghost", on: { click: () => go("home") } }, T().home)));
+	const textScreen = (title, paras) => () => h("div", { class: "page" }, h("h2", { text: title() }),
+		...paras().map((p) => Array.isArray(p) ? h("div", { class: "item" }, h("b", { text: p[0] }), h("div", { text: p[1] })) : h("p", { text: p })));
 
-	// ---- shell -------------------------------------------------------
-	function shell() {
-		const t = T();
-		document.documentElement.lang = st.lang;
-		$("warn").textContent = t.warnTest;
-		$("online").textContent = t.warnOnline;
-		$("tagline").textContent = t.subtitle;
-		$("lang").textContent = "🌐 " + t.langName;
-		$("about").textContent = t.about;
-		$("donate").textContent = "💛 " + t.donateTitle;
-	}
-	const online = () => $("online").classList.toggle("hidden", !navigator.onLine);
-	addEventListener("online", online);
-	addEventListener("offline", online);
-	$("lang").addEventListener("click", () => { st.lang = T().langSwitch; render(); });
-	$("logo").addEventListener("click", () => go("home"));
-	$("about").addEventListener("click", () => go("about"));
-	$("donate").addEventListener("click", () => go("donate"));
-	function go(screen) { stopPlaying(); stopMic(); st.screen = screen; render(); scrollTo(0, 0); }
-	function render() {
-		shell(); online();
-		$("app").replaceChildren(({
-			home, send: sendScreen, listen: listenScreen,
-			cables: textScreen(() => "🔌 " + T().cables, () => T().cableText),
-			about: textScreen(() => T().about, () => T().aboutText),
-			donate,
-		})[st.screen]());
-	}
 	// ---- donate ------------------------------------------------------
 	const DONATE = { bitcoin: "bc1qx5snc0wlc8cg9gwxhyx27y6pkru8rnngyq7uja", lightning: "ndssigner@coinos.io",
 		lnurl: "LNURL1DP68GURN8GHJ7CM0D9HX7UEWD9HJ7TNHV4KXCTTTDEHHWM30D3H82UNVWQHKUERNWD5KWMN9WGQ8XE42" };
 	function donate() {
 		const t = T();
 		const box = (img, title, address, extra) => h("div", { class: "donate-box" },
-			h("img", { src: img, alt: title, width: 180, height: 180 }), h("b", { text: title }),
+			h("img", { src: img, alt: title, width: 160, height: 160 }), h("b", { text: title }),
 			h("code", { text: address }), copyButton(() => address), extra || null);
-		return h("div", { class: "card" },
-			h("h2", { text: "💛 " + t.donateTitle }), h("p", { text: t.donateText }),
+		return h("div", { class: "page" },
+			h("h2", { text: t.donateTitle }), h("p", { text: t.donateText }),
 			h("div", { class: "donate" },
 				box(DONATE_IMAGES.bitcoin, "Bitcoin", DONATE.bitcoin),
 				box(DONATE_IMAGES.lightning, "Lightning", DONATE.lightning,
 					h("details", { class: "more" }, h("summary", { text: t.donateLnurl }), h("code", { class: "wrap", text: DONATE.lnurl }), copyButton(() => DONATE.lnurl)))),
-			h("p", { class: "help", text: t.donateMore }),
-			h("div", { class: "nav" }, h("button", { class: "btn ghost", on: { click: () => go("home") } }, t.home)));
+			h("p", { class: "hint", text: t.donateMore }));
+	}
+
+	// ---- shell -------------------------------------------------------
+	const TABS = ["send", "listen", "cables"];
+	function shell() {
+		const t = T();
+		document.documentElement.lang = st.lang;
+		$("draft").textContent = t.draft;
+		$("draft").title = t.warnTest;
+		$("tagline").textContent = t.subtitle;
+		$("lang").textContent = t.langName;
+		$("about").textContent = t.about;
+		$("donate").textContent = "💛 " + t.donateTitle;
+		$("tabs").replaceChildren(...TABS.map((name) => h("button", { class: st.screen === name ? "on" : "", on: { click: () => go(name) } }, t[name])));
+	}
+	// the connection, always in sight; the warnings themselves appear next to a seed (seedAlert)
+	const online = () => {
+		const t = T(), on = navigator.onLine;
+		$("net").className = "net " + (on ? "on" : "off");
+		$("net").textContent = on ? t.netOn : t.netOff;
+		$("net").title = on ? t.warnOnline : "";
+	};
+	const seedAlert = () => h("div", { class: "alert" }, navigator.onLine ? T().seedOnline : T().seedTest);
+	addEventListener("online", online);
+	addEventListener("offline", online);
+	$("lang").addEventListener("click", () => { st.lang = T().langSwitch; render(); });
+	$("logo").addEventListener("click", () => go("send"));
+	$("about").addEventListener("click", () => go("about"));
+	$("donate").addEventListener("click", () => go("donate"));
+	function go(screen) { stopPlaying(); stopMic(); st.screen = screen; render(); scrollTo(0, 0); }
+	function render() {
+		shell(); online();
+		$("app").replaceChildren(({
+			send: sendScreen, listen: listenScreen,
+			cables: textScreen(() => T().cables, () => T().cableText),
+			about: textScreen(() => T().about, () => T().aboutText),
+			donate,
+		})[st.screen]());
 	}
 
 	render();

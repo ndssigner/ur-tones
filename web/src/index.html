@@ -11,17 +11,14 @@
 <style>{{STYLE}}</style>
 </head>
 <body data-format-version="{{FORMAT_VERSION}}">
-<div class="bar warn" id="warn"></div>
-<div class="bar online hidden" id="online"></div>
-<div class="wrap">
-	<header class="top">
-		<div class="logo" id="logo">🎵 ur-<span>tones</span></div>
-		<div class="tagline" id="tagline"></div>
-		<button class="pill" id="lang"></button>
-	</header>
-	<main id="app"></main>
-	<footer><button id="about"></button> · <button id="donate"></button></footer>
-</div>
+<header class="top">
+	<div class="brand" id="logo"><b>ur-<span>tones</span></b><span class="badge" id="draft"></span><small id="tagline"></small></div>
+	<nav class="tabs" id="tabs"></nav>
+	<span class="net" id="net"></span>
+	<button class="pill" id="lang"></button>
+</header>
+<main class="wrap" id="app"></main>
+<footer><button id="about"></button> · <button id="donate"></button></footer>
 <script>{{SCRIPT}}</script>
 </body>
 </html>
