@@ -448,27 +448,57 @@
 	const textScreen = (title, paras) => () => h("div", { class: "page" }, h("h2", { text: title() }),
 		...paras().map((p) => Array.isArray(p) ? h("div", { class: "item" }, h("b", { text: p[0] }), h("div", { text: p[1] })) : h("p", { text: p })));
 
+	// The start page's keypad: the 16 DTMF keys, each a row tone plus a column
+	// tone (SPEC §1); pressing one plays it for 160 ms, the way a frame's keys sound.
+	function keypad() {
+		const t = T(), PAD = ["123A", "456B", "789C", "*0#D"];
+		const press = (key, button) => {
+			const ctx = player.ctx = player.ctx || new AudioContext();
+			ctx.resume();
+			const t0 = ctx.currentTime + 0.01, gain = ctx.createGain();
+			gain.gain.setValueAtTime(0, t0);
+			gain.gain.linearRampToValueAtTime(0.18, t0 + 0.005);
+			gain.gain.setValueAtTime(0.18, t0 + 0.155);
+			gain.gain.linearRampToValueAtTime(0, t0 + 0.16);
+			gain.connect(ctx.destination);
+			for (const f of TN.FREQS[key]) {
+				const o = ctx.createOscillator();
+				o.frequency.value = f; o.connect(gain); o.start(t0); o.stop(t0 + 0.17);
+			}
+			button.classList.add("lit");
+			setTimeout(() => button.classList.remove("lit"), 170);
+		};
+		const [low, high] = [PAD.map((r) => TN.FREQS[r[0]][0]), [...PAD[0]].map((k) => TN.FREQS[k][1])];
+		const grid = h("div", { class: "pad-grid" }, h("span", {}), high.map((f) => h("span", { class: "pad-hz", text: f + " Hz" })),
+			PAD.flatMap((row, r) => [h("span", { class: "pad-hz row", text: low[r] + " Hz" }),
+				[...row].map((k) => { const b = h("button", { class: "pad-key" + (/[A-D]/.test(k) ? " abcd" : ""), "aria-label": t.padKey(k, ...TN.FREQS[k]), text: k });
+					b.addEventListener("click", () => press(k, b)); return b; })].flat()));
+		return h("figure", { class: "pad" }, grid, h("figcaption", { text: t.padCaption }));
+	}
+
 	// ---- start: what this page is, what to expect, offline use, the sister projects ----
 	function intro() {
 		const t = T();
 		const card = (name, url, desc) => h("a", { class: "sib-card", href: url, target: "_blank", rel: "noopener noreferrer" },
 			h("b", { text: name + " ↗" }), h("span", { text: desc }));
 		return h("div", { class: "intro" },
-			h("section", { class: "hero" }, h("h1", { text: t.introTitle }), h("p", { class: "lead", text: t.introLead }),
-				h("div", { class: "row" },
-					h("button", { class: "btn big", on: { click: () => go("send") } }, t.startSend + " ▶"),
-					h("button", { class: "btn ghost big", on: { click: () => go("listen") } }, t.startListen),
-					h("button", { class: "btn ghost", on: { click: () => go("cables") } }, t.startConnect))),
+			h("section", { class: "hero" },
+				h("div", { class: "hero-text" }, h("h1", { text: t.introTitle }), h("p", { class: "lead", text: t.introLead }),
+					h("div", { class: "row" },
+						h("button", { class: "btn big", on: { click: () => go("send") } }, t.startSend),
+						h("button", { class: "btn ghost big", on: { click: () => go("listen") } }, t.startListen),
+						h("button", { class: "btn ghost", on: { click: () => go("cables") } }, t.startConnect))),
+				keypad()),
 			h("div", { class: "tool" },
 				panel(h("h2", { class: "panel-title", text: t.expectTitle }),
 					h("ul", { class: "list" }, t.expect.map((x) => h("li", { text: x }))),
 					h("div", { class: "note" }, h("b", { text: t.notTitle + ". " }), t.not)),
-				panel(h("h2", { class: "panel-title", text: "🔌 " + t.safeTitle }),
+				panel(h("h2", { class: "panel-title", text: t.safeTitle }),
 					h("ul", { class: "list" }, t.safe.map((x) => h("li", { text: x }))),
 					h("div", { class: "row" }, link(REPO_URL + "/releases", t.releases)))),
 			h("section", { class: "panel" }, h("h2", { class: "panel-title", text: t.siblingsTitle }),
 				h("div", { class: "sib-cards" }, SIBLINGS.map(([name, url, key]) => card(name, url, t[key])))),
-			h("section", { class: "panel" }, h("h2", { class: "panel-title", text: "💛 " + t.supportTitle }), donateBody()));
+			h("section", { class: "panel" }, h("h2", { class: "panel-title", text: t.supportTitle }), donateBody()));
 	}
 
 	// ---- donate ------------------------------------------------------
@@ -501,7 +531,7 @@
 		$("tagline").textContent = t.subtitle;
 		$("lang").textContent = t.langName;
 		$("about").textContent = t.about;
-		$("donate").textContent = "💛 " + t.donateTitle;
+		$("donate").textContent = t.donateTitle;
 		$("tabs").replaceChildren(...TABS.map((name) => h("button", { class: st.screen === name ? "on" : "", on: { click: () => go(name) } }, t[name])));
 	}
 	// the connection, always in sight; the warnings themselves appear next to a seed (seedAlert)
