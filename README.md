@@ -81,6 +81,17 @@ python3 tools/bundle.py v0.1.0       # the release zip, reproducible
 Recordings help most: if the tool misses tones in your setup, a WAV of it
 (with a **test** seed or a testnet PSBT) is the best bug report.
 
+## Donate
+
+ur-tones is free and has no funding. Donations help keep it going:
+
+<table>
+<tr><td align="center"><img src="docs/images/donate-bitcoin.png" width="180" alt="Bitcoin"><br><b>Bitcoin</b><br><code>bc1qx5snc0wlc8cg9gwxhyx27y6pkru8rnngyq7uja</code></td>
+<td align="center"><img src="docs/images/donate-lightning.png" width="180" alt="Lightning"><br><b>Lightning</b><br><code>ndssigner@coinos.io</code><br><sub>LNURL (for wallets without Lightning addresses):<br><code>LNURL1DP68GURN8GHJ7CM0D9HX7UEWD9HJ7TNHV4KXCTTTDEHHWM30D3H82UNVWQHKUERNWD5KWMN9WGQ8XE42</code></sub></td></tr>
+</table>
+
+The same addresses as [NDS-Signer](https://github.com/ndssigner/nds-signer#donate).
+
 ## License
 
 MIT, see [LICENSE](LICENSE). The UR fountain codes are ported from Foundation

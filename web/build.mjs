@@ -11,7 +11,12 @@ const here = new URL(".", import.meta.url);
 const read = (p) => readFileSync(new URL(p, here), "utf8");
 const cspHash = (text) => "sha256-" + createHash("sha256").update(text, "utf8").digest("base64");
 
-const script = ["src/bip39-english.js", "src/crypto.js", "src/ur-tones.js", "src/i18n.js", "src/app.js"]
+// The donation QR codes (the same images as NDS-Signer's README), inlined:
+// data: URLs are the only images the page may show.
+const png = (f) => "data:image/png;base64," + readFileSync(new URL("../docs/images/" + f, here)).toString("base64");
+const donate = `// ---- donation images ----\nconst DONATE_IMAGES = { bitcoin: "${png("donate-bitcoin.png")}", lightning: "${png("donate-lightning.png")}" };\n`;
+
+const script = donate + ["src/bip39-english.js", "src/crypto.js", "src/ur-tones.js", "src/i18n.js", "src/app.js"]
 	.map((f) => `// ---- ${f} ----\n${read(f)}`).join("\n");
 const style = read("src/style.css");
 const formatVersion = /const FORMAT_VERSION = (\d+);/.exec(read("src/ur-tones.js"))[1];

@@ -338,6 +338,7 @@
 		$("tagline").textContent = t.subtitle;
 		$("lang").textContent = "🌐 " + t.langName;
 		$("about").textContent = t.about;
+		$("donate").textContent = "💛 " + t.donateTitle;
 	}
 	const online = () => $("online").classList.toggle("hidden", !navigator.onLine);
 	addEventListener("online", online);
@@ -345,6 +346,7 @@
 	$("lang").addEventListener("click", () => { st.lang = T().langSwitch; render(); });
 	$("logo").addEventListener("click", () => go("home"));
 	$("about").addEventListener("click", () => go("about"));
+	$("donate").addEventListener("click", () => go("donate"));
 	function go(screen) { stopPlaying(); stopMic(); st.screen = screen; render(); scrollTo(0, 0); }
 	function render() {
 		shell(); online();
@@ -352,7 +354,26 @@
 			home, send: sendScreen, listen: listenScreen,
 			cables: textScreen(() => "🔌 " + T().cables, () => T().cableText),
 			about: textScreen(() => T().about, () => T().aboutText),
+			donate,
 		})[st.screen]());
 	}
+	// ---- donate ------------------------------------------------------
+	const DONATE = { bitcoin: "bc1qx5snc0wlc8cg9gwxhyx27y6pkru8rnngyq7uja", lightning: "ndssigner@coinos.io",
+		lnurl: "LNURL1DP68GURN8GHJ7CM0D9HX7UEWD9HJ7TNHV4KXCTTTDEHHWM30D3H82UNVWQHKUERNWD5KWMN9WGQ8XE42" };
+	function donate() {
+		const t = T();
+		const box = (img, title, address, extra) => h("div", { class: "donate-box" },
+			h("img", { src: img, alt: title, width: 180, height: 180 }), h("b", { text: title }),
+			h("code", { text: address }), copyButton(() => address), extra || null);
+		return h("div", { class: "card" },
+			h("h2", { text: "💛 " + t.donateTitle }), h("p", { text: t.donateText }),
+			h("div", { class: "donate" },
+				box(DONATE_IMAGES.bitcoin, "Bitcoin", DONATE.bitcoin),
+				box(DONATE_IMAGES.lightning, "Lightning", DONATE.lightning,
+					h("details", { class: "more" }, h("summary", { text: t.donateLnurl }), h("code", { class: "wrap", text: DONATE.lnurl }), copyButton(() => DONATE.lnurl)))),
+			h("p", { class: "help", text: t.donateMore }),
+			h("div", { class: "nav" }, h("button", { class: "btn ghost", on: { click: () => go("home") } }, t.home)));
+	}
+
 	render();
 })();
