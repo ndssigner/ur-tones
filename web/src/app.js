@@ -8,7 +8,7 @@
 	const $ = (id) => document.getElementById(id);
 	const st = {
 		lang: (navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en",
-		screen: "send",
+		screen: "intro",
 		send: { text: "", mode: "data", pin: "", made: "", pace: "cable" },
 	};
 	const T = () => UR_TONES_TEXT[st.lang];
@@ -395,13 +395,19 @@
 			const listener = newListener(mic.ctx.sampleRate);
 			mic.src = mic.ctx.createMediaStreamSource(mic.stream);
 			mic.proc = mic.ctx.createScriptProcessor(2048, 1, 1);
-			let ready = false;
+			let ready = false, live = 0;
 			Object.assign(rec, { rate: mic.ctx.sampleRate, dec: Math.max(1, Math.floor(mic.ctx.sampleRate / 8000)), pend: [], chunks: [], n: 0 });
 			rec.max = Math.floor(600 * rec.rate / rec.dec);
 			recSave.disabled = true; recInfo.textContent = "";
 			mic.proc.onaudioprocess = (e) => {
 				const x = e.inputBuffer.getChannelData(0);
-				if (!ready && x.some((v) => v !== 0)) {   // the first real sound: from now on nothing is lost
+				// ready once the microphone really delivers sound (some browsers, Safari among
+				// them, first send silence or near-zero samples for a while): two buffers in a
+				// row above -70 dBFS RMS, which any real microphone's own noise passes
+				let sum = 0;
+				for (let i = 0; i < x.length; i++) sum += x[i] * x[i];
+				live = Math.sqrt(sum / x.length) > 3e-4 ? live + 1 : 0;
+				if (!ready && live >= 2) {
 					ready = true;
 					micState.className = "status live"; micState.textContent = t.micReady;
 				}
@@ -442,16 +448,42 @@
 	const textScreen = (title, paras) => () => h("div", { class: "page" }, h("h2", { text: title() }),
 		...paras().map((p) => Array.isArray(p) ? h("div", { class: "item" }, h("b", { text: p[0] }), h("div", { text: p[1] })) : h("p", { text: p })));
 
+	// ---- start: what this page is, what to expect, offline use, the sister projects ----
+	function intro() {
+		const t = T();
+		const card = (name, url, desc) => h("a", { class: "sib-card", href: url, target: "_blank", rel: "noopener noreferrer" },
+			h("b", { text: name + " ↗" }), h("span", { text: desc }));
+		return h("div", { class: "intro" },
+			h("section", { class: "hero" }, h("h1", { text: t.introTitle }), h("p", { class: "lead", text: t.introLead }),
+				h("div", { class: "row" },
+					h("button", { class: "btn big", on: { click: () => go("send") } }, t.startSend + " ▶"),
+					h("button", { class: "btn ghost big", on: { click: () => go("listen") } }, t.startListen),
+					h("button", { class: "btn ghost", on: { click: () => go("cables") } }, t.startConnect))),
+			h("div", { class: "tool" },
+				panel(h("h2", { class: "panel-title", text: t.expectTitle }),
+					h("ul", { class: "list" }, t.expect.map((x) => h("li", { text: x }))),
+					h("div", { class: "note" }, h("b", { text: t.notTitle + ". " }), t.not)),
+				panel(h("h2", { class: "panel-title", text: "🔌 " + t.safeTitle }),
+					h("ul", { class: "list" }, t.safe.map((x) => h("li", { text: x }))),
+					h("div", { class: "row" }, link(REPO_URL + "/releases", t.releases)))),
+			h("section", { class: "panel" }, h("h2", { class: "panel-title", text: t.siblingsTitle }),
+				h("div", { class: "sib-cards" }, SIBLINGS.map(([name, url, key]) => card(name, url, t[key])))),
+			h("section", { class: "panel" }, h("h2", { class: "panel-title", text: "💛 " + t.supportTitle }), donateBody()));
+	}
+
 	// ---- donate ------------------------------------------------------
 	const DONATE = { bitcoin: "bc1qx5snc0wlc8cg9gwxhyx27y6pkru8rnngyq7uja", lightning: "ndssigner@coinos.io",
 		lnurl: "LNURL1DP68GURN8GHJ7CM0D9HX7UEWD9HJ7TNHV4KXCTTTDEHHWM30D3H82UNVWQHKUERNWD5KWMN9WGQ8XE42" };
 	function donate() {
 		const t = T();
+		return h("div", { class: "page" }, h("h2", { text: t.donateTitle }), donateBody());
+	}
+	function donateBody() {
+		const t = T();
 		const box = (img, title, address, extra) => h("div", { class: "donate-box" },
 			h("img", { src: img, alt: title, width: 160, height: 160 }), h("b", { text: title }),
 			h("code", { text: address }), copyButton(() => address), extra || null);
-		return h("div", { class: "page" },
-			h("h2", { text: t.donateTitle }), h("p", { text: t.donateText }),
+		return h("div", {}, h("p", { text: t.donateText }),
 			h("div", { class: "donate" },
 				box(DONATE_IMAGES.bitcoin, "Bitcoin", DONATE.bitcoin),
 				box(DONATE_IMAGES.lightning, "Lightning", DONATE.lightning,
@@ -460,7 +492,7 @@
 	}
 
 	// ---- shell -------------------------------------------------------
-	const TABS = ["send", "listen", "cables"];
+	const TABS = ["intro", "send", "listen", "cables"];
 	function shell() {
 		const t = T();
 		document.documentElement.lang = st.lang;
@@ -486,7 +518,7 @@
 	// the explanation: on hover (CSS), or on a tap, for touch screens
 	$("net").addEventListener("click", (e) => { e.stopPropagation(); $("net-why").classList.toggle("open"); });
 	document.addEventListener("click", () => $("net-why").classList.remove("open"));
-	$("logo").addEventListener("click", () => go("send"));
+	$("logo").addEventListener("click", () => go("intro"));
 	$("about").addEventListener("click", () => go("about"));
 	$("donate").addEventListener("click", () => go("donate"));
 	function go(screen) { stopPlaying(); stopMic(); st.screen = screen; render(); scrollTo(0, 0); }
@@ -499,13 +531,12 @@
 		$("repo").href = $("gh").href = REPO_URL;
 		$("gh").title = t.repo;
 		$("repo").textContent = t.repo;
-		$("siblings").replaceChildren(h("span", { text: t.siblings }),
-			...SIBLINGS.map(([name, url, key]) => h("span", { class: "sib" }, link(url, name, t[key]), h("span", { class: "sib-desc", text: " — " + t[key] }))));
+
 	}
 	function render() {
 		shell(); online(); links();
 		$("app").replaceChildren(({
-			send: sendScreen, listen: listenScreen,
+			intro, send: sendScreen, listen: listenScreen,
 			cables: textScreen(() => T().cables, () => T().cableText),
 			about: textScreen(() => T().about, () => T().aboutText),
 			donate,
