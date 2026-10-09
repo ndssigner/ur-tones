@@ -477,12 +477,15 @@
 		const t = T(), on = navigator.onLine;
 		$("net").className = "net " + (on ? "on" : "off");
 		$("net").textContent = on ? t.netOn : t.netOff;
-		$("net").title = on ? t.warnOnline : "";
+		$("net-why").replaceChildren(h("b", { text: on ? t.netOnTitle : t.netOffTitle }), h("div", { text: on ? t.netOnWhy : t.netOffWhy }));
 	};
 	const seedAlert = () => h("div", { class: "alert" }, navigator.onLine ? T().seedOnline : T().seedTest);
 	addEventListener("online", online);
 	addEventListener("offline", online);
 	$("lang").addEventListener("click", () => { st.lang = T().langSwitch; render(); });
+	// the explanation: on hover (CSS), or on a tap, for touch screens
+	$("net").addEventListener("click", (e) => { e.stopPropagation(); $("net-why").classList.toggle("open"); });
+	document.addEventListener("click", () => $("net-why").classList.remove("open"));
 	$("logo").addEventListener("click", () => go("send"));
 	$("about").addEventListener("click", () => go("about"));
 	$("donate").addEventListener("click", () => go("donate"));

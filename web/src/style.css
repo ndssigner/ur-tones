@@ -20,14 +20,27 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .hidden { display: none !important; }
 
 /* top */
-.badge { font-size: 11px; font-weight: 650; padding: 1px 7px; border-radius: 99px; background: var(--warn-bg); color: var(--warn-fg); cursor: help; }
-.net { font-size: 13px; font-weight: 650; cursor: help; }
-.net.on { color: var(--bad); }
-.net.off { color: var(--ok); }
+.badge { white-space: nowrap; font-size: 11px; font-weight: 650; padding: 1px 7px; border-radius: 99px; background: var(--warn-bg); color: var(--warn-fg); cursor: help; }
+.net-wrap { position: relative; }
+.net { font-size: 13px; font-weight: 700; cursor: help; border: 0; border-radius: 99px; padding: 4px 11px; }
+.net.off { background: none; color: var(--ok); }
+/* online is the dangerous state: a solid red pill that pulses, hard to miss */
+.net.on { background: var(--danger-bg); color: var(--danger-fg); animation: net-pulse 1.6s ease-in-out infinite; }
+@keyframes net-pulse {
+	0%, 100% { box-shadow: 0 0 0 0 rgba(179, 38, 30, .55); }
+	50% { box-shadow: 0 0 0 7px rgba(179, 38, 30, 0); opacity: .82; }
+}
+@media (prefers-reduced-motion: reduce) { .net.on { animation: none; } }
+.net-why { display: none; position: absolute; right: 0; top: calc(100% + 8px); width: min(340px, calc(100vw - 24px)); z-index: 20;
+	background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+	font-size: 13px; line-height: 1.45; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
+.net-why b { display: block; margin-bottom: 4px; }
+.net.on + .net-why { border-color: var(--danger-bg); }
+.net-wrap:hover .net-why, .net:focus-visible + .net-why, .net-why.open { display: block; }
 header.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
 	padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: baseline; gap: 10px; cursor: pointer; min-width: 0; }
-.brand b { font-size: 18px; letter-spacing: -0.3px; }
+.brand b { font-size: 18px; letter-spacing: -0.3px; white-space: nowrap; }
 .brand b span { color: var(--accent); }
 .brand small { color: var(--muted); font-size: 13px; }
 .tabs { display: flex; gap: 2px; background: var(--soft); border-radius: 8px; padding: 3px; margin-left: auto; }
@@ -35,7 +48,9 @@ header.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: c
 .tabs button.on { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 .pill { border: 1px solid var(--line); background: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
 @media (max-width: 640px) {
-	header.top { position: static; gap: 8px 12px; }
+	header.top { position: relative; gap: 8px 12px; }
+	.net-wrap { position: static; }
+	.net-why { left: 12px; right: 12px; width: auto; top: calc(100% + 4px); }
 	.brand { flex: 1; }
 	.brand small { display: none; }
 	.tabs { order: 3; flex-basis: 100%; margin-left: 0; }
