@@ -26,12 +26,23 @@ for (const len of [0, 1, 55, 56, 63, 64, 65, 200]) {
 	const data = Uint8Array.from({ length: len }, (_, i) => (i * 7 + 3) & 255);
 	check(hex(C.sha256(data)) === createHash("sha256").update(data).digest("hex"), "sha256 len " + len);
 }
+for (const len of [0, 1, 111, 112, 127, 128, 129, 300]) {
+	const data = Uint8Array.from({ length: len }, (_, i) => (i * 13 + 5) & 255);
+	check(hex(C.sha512(data)) === createHash("sha512").update(data).digest("hex"), "sha512 len " + len);
+}
 const enc = new TextEncoder();
+check(hex(C.ripemd160(new Uint8Array(0))) === "9c1185a5c5e9fc54612808977ee8f548b2258d31", "ripemd160 empty");
+check(hex(C.ripemd160(enc.encode("abc"))) === "8eb208f7e05d987a9b044a8e98c6b087f15a0bfc", "ripemd160 abc");
+check(hex(C.ripemd160(enc.encode("a".repeat(1000)))) === "aa69deee9a8922e92f8105e007f76110f381e9cf", "ripemd160 1000 a");
+// fingerprints as wallets show them (the BIP-39 test seed; NDS-Signer's test seed)
+check(C.fingerprint(C.mnemonicToEntropy("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")) === "73c5da0a", "fingerprint abandon");
+check(C.fingerprint(C.mnemonicToEntropy("height demise useless trap grow lion found off key clown transfer enroll")) === "8b218e81", "fingerprint height");
 check(hex(C.pbkdf2Sha256(enc.encode("1234"), enc.encode(C.PIN_SALT), 10000, 32))
 	=== pbkdf2Sync("1234", C.PIN_SALT, 10000, 32, "sha256").toString("hex"), "pbkdf2");
 
 // vectors
 const vectors = JSON.parse(read("../vectors/ur-tones-v0.json")).vectors;
+check(C.fingerprint(C.mnemonicToEntropy(vectors.find((v) => v.mnemonic && v.mnemonic.split(" ").length === 24).mnemonic)) === "8c65eb9f", "fingerprint 24 words (embit)");
 const bytes = (h) => Uint8Array.from(Buffer.from(h, "hex"));
 const substitute = (frame, positions) => {
 	const t = [...frame];

@@ -9,7 +9,7 @@
 	const st = {
 		lang: (navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en",
 		screen: "home",
-		send: { text: "", mode: "data", pin: "", pace: "cable" },
+		send: { text: "", mode: "data", pin: "", made: "", pace: "cable" },
 	};
 	const T = () => UR_TONES_TEXT[st.lang];
 	// SPEC §1.1. Keypad mode's digits repeat: never faster than 80 + 80 ms
@@ -32,6 +32,41 @@
 		return e;
 	}
 	const cleanPin = (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+	// A seed's fingerprint (about half a second: PBKDF2 and secp256k1), kept per seed
+	const fingerprints = new Map();
+	function fingerprintOf(entropy) {
+		const key = Array.from(entropy, (b) => b.toString(16).padStart(2, "0")).join("");
+		if (!fingerprints.has(key)) fingerprints.set(key, S.fingerprint(entropy));
+		return fingerprints.get(key);
+	}
+	// The fingerprint, big, filled in a moment later so the page does not wait for it
+	function fingerprintBox(entropy, help) {
+		const t = T(), value = h("div", { class: "fp-value", text: "…" });
+		setTimeout(() => { value.textContent = fingerprintOf(entropy); }, 30);
+		return h("div", { class: "fp" }, h("div", { class: "fp-label", text: t.fingerprint }), value, h("p", { class: "help", text: help }));
+	}
+	// A made-up PIN (SPEC §4): 8 characters without 0/O or 1/I, 40 bits; 32 divides 256, so no bias
+	const PIN_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+	const makePin = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => PIN_ALPHABET[b % 32]).join("");
+	// The PIN box, and 🎲 to make one up here and type it on the other device
+	// (st.pin, and st.made: the PIN made up here, shown big until it is edited)
+	function pinField(st, onChange) {
+		const t = T();
+		const shown = h("div", { class: "pin-made" });
+		const show = () => shown.replaceChildren(...(st.pin && st.pin === st.made
+			? [h("div", { class: "pin-big", text: st.pin }), h("p", { class: "help", text: t.pinMadeHelp })] : []));
+		const input = h("input", { class: "pin", autocomplete: "off", autocapitalize: "characters", spellcheck: "false", placeholder: "PIN", value: st.pin,
+			on: { input: (e) => { st.pin = cleanPin(e.target.value); e.target.value = st.pin; show(); },
+				change: () => onChange && onChange() } });
+		const dice = h("button", { class: "btn ghost", on: { click: () => {
+			st.pin = st.made = makePin();
+			input.value = st.pin;
+			show();
+			if (onChange) onChange();
+		} } }, "🎲 " + t.pinMake);
+		show();
+		return h("div", {}, h("div", { class: "row" }, input, dice), shown);
+	}
 	const toBase64 = (b) => btoa(Array.from(b, (x) => String.fromCharCode(x)).join(""));
 	const fromBase64 = (s) => Uint8Array.from(atob(s.replace(/\s+/g, "")), (c) => c.charCodeAt(0));
 	const fromHex = (s) => Uint8Array.from(s.replace(/\s+/g, "").match(/../g) || [], (x) => parseInt(x, 16));
@@ -175,9 +210,8 @@
 			const seg = (items, value, set) => h("div", { class: "seg" }, items.map(([v, label, help]) =>
 				h("button", { class: v === value ? "on" : "", on: { click: () => { set(v); update(); } } }, label, h("small", { text: help }))));
 			if (input.kind === "seed") {
-				const pin = h("input", { class: "pin", autocomplete: "off", autocapitalize: "characters", spellcheck: "false", placeholder: "PIN", value: s.pin,
-					on: { input: (e) => { s.pin = cleanPin(e.target.value); e.target.value = s.pin; }, change: () => update() } });
-				options.append(h("h3", { text: t.seedMode }),
+				const pin = pinField(s, () => update());
+				options.append(fingerprintBox(input.entropy, t.fingerprintSend), h("h3", { text: t.seedMode }),
 					seg([["data", t.modeData, t.modeDataHelp], ["keypad", t.modeKeypad, t.modeKeypadHelp]], s.mode, (v) => { s.mode = v; }),
 					h("h3", { text: t.pinTitle }), h("p", { class: "help", text: t.pinHelp }), pin);
 			}
@@ -223,7 +257,7 @@
 
 	function listenScreen() {
 		const t = T();
-		const L = { decoder: null, done: false, pin: "" };
+		const L = { decoder: null, done: false, pin: "", made: "" };
 		const meter = h("div", {}), heard = h("div", { class: "keys heard" }), list = h("div", { class: "frames" });
 		const progress = h("div", { class: "progress" }, h("div", {})), progressText = h("div", { class: "help" });
 		const result = h("div", {}), err = h("div", {});
@@ -252,8 +286,7 @@
 			recInfo.textContent = t.recLength(Math.round(rec.n / (rec.rate / d)));
 			recSave.disabled = false;
 		}
-		const pin = h("input", { class: "pin", autocomplete: "off", autocapitalize: "characters", spellcheck: "false", placeholder: "PIN",
-			on: { input: (e) => { L.pin = cleanPin(e.target.value); e.target.value = L.pin; } } });
+		const pin = pinField(L);
 
 		function addFrame(ok, text) {
 			list.prepend(h("div", { class: ok ? "ok" : "bad", text }));
@@ -278,6 +311,7 @@
 		function gotSeed(entropy) {
 			const words = S.entropyToMnemonic(entropy).split(" ");
 			finish(h("div", { class: "card done" }, h("h2", { text: t.gotSeed }), h("p", { text: t.seedWords }),
+				fingerprintBox(entropy, t.fingerprintReceive),
 				h("div", { class: "words" }, words.map((w, i) => h("div", {}, h("span", { text: String(i + 1) }), w))),
 				L.pin ? h("p", { class: "help", text: t.pinApplied }) : null));
 		}

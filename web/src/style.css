@@ -130,6 +130,7 @@ pre.code { font-family: var(--mono); font-size: 14px; background: var(--soft); p
 ol.how-to li { margin: 4px 0; }
 .pin-advice { border: 2px solid var(--accent); background: var(--accent-soft); }
 input.pin { max-width: 300px; font-family: var(--mono); font-size: 20px; letter-spacing: 2px; text-transform: uppercase; }
+.pin-made .pin-big { font-family: var(--mono); font-size: 40px; font-weight: 800; letter-spacing: 6px; color: var(--accent); margin: 10px 0 0; word-break: break-all; }
 .magic { border: 3px dashed #c9a227; border-radius: 20px; background: #fff8e1; padding: 16px 20px; margin: 18px 0 6px; text-align: center; }
 .magic-title { font-size: 26px; font-weight: 800; color: #8a5a00; }
 .magic p { font-size: 18px; margin: 6px 0 0; }
@@ -166,5 +167,8 @@ footer button { background: none; border: 0; color: var(--accent); cursor: point
 .frames .ok { color: var(--ok); }
 .frames .bad { color: var(--bad); }
 .card.done { border: 2px solid var(--ok); }
-input.pin { max-width: 300px; font-family: var(--mono); font-size: 20px; letter-spacing: 2px; text-transform: uppercase; }
 textarea.seed[readonly] { font-size: 14px; min-height: 120px; }
+.fp { border: 2px solid var(--accent); border-radius: 14px; padding: 10px 14px; margin: 12px 0; }
+.fp-label { color: var(--muted); font-size: 14px; }
+.fp-value { font-family: var(--mono); font-size: 32px; font-weight: 800; letter-spacing: 3px; color: var(--accent); }
+.fp .help { margin: 4px 0 0; }

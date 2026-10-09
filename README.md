@@ -26,8 +26,9 @@ backs seeds up as sequences of things.
 - **Keypad mode**: a seed as `*`, the Standard SeedQR digits (four per word),
   `#`. Any phone can key it, at any pace. For cables and quiet rooms.
 - **PIN for seeds**: so that whoever overhears or records the tones gets a
-  different seed. Transactions are not encrypted (they give no access to
-  funds).
+  different seed. Either side can make one up (🎲) for the other to type,
+  and both show the seed's fingerprint, so a wrong PIN shows up at once.
+  Transactions are not encrypted (they give no access to funds).
 - **Pace**: by cable, 40 ms tones with 20 ms of silence (about 16 tones per
   second: a 450-byte PSBT in under 2 minutes); through the air, 80 + 80 ms.
 - **Cables**: which ones, levels, and the Nintendo DSi's odd socket: see

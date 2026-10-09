@@ -182,6 +182,20 @@ also know the PIN. Each guess costs 10 000 HMACs, but a short PIN can be
 guessed: use 8 characters or more. It is not a replacement for a BIP-39
 passphrase.
 
+**Making one up.** People choose guessable PINs, so either side may make one
+up and show it, for the other side to type by hand: 8 characters from
+`23456789ABCDEFGHJKLMNPQRSTUVWXYZ` (no 0/O or 1/I to confuse; 32 symbols, so
+a random byte modulo 32 is unbiased), 40 bits. The reference web tool uses
+the browser's cryptographic generator; NDS-Signer hashes a second of
+microphone noise with SHA-256. Since the PIN is just letters and digits, a
+made-up PIN needs nothing else from the receiver: it is typed like any other.
+
+**Checking it.** A wrong PIN is not detected (that is the point), so both
+sides should show the seed's **fingerprint** (the BIP-32 master key's, without
+a passphrase, as wallets show it): the sender for the seed it sends, the
+receiver for the seed it got. The same fingerprint: the right seed. Another
+one: a wrong PIN (or a wrong seed).
+
 ## 5. Cables
 
 By cable, nothing else can hear the tones and the levels are steady. The
