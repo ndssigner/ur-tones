@@ -490,8 +490,20 @@
 	$("about").addEventListener("click", () => go("about"));
 	$("donate").addEventListener("click", () => go("donate"));
 	function go(screen) { stopPlaying(); stopMic(); st.screen = screen; render(); scrollTo(0, 0); }
+	// the repository, and the sister projects (plain links: the page itself still connects nowhere)
+	const REPO_URL = "https://github.com/ndssigner/ur-tones";
+	const SIBLINGS = [["NDS-Signer", "https://github.com/ndssigner/nds-signer", "sibNds"], ["Seedcraft", "https://github.com/ndssigner/seedcraft", "sibSeedcraft"]];
+	const link = (href, text, tip) => h("a", { href, target: "_blank", rel: "noopener noreferrer", title: tip || null }, text);
+	function links() {
+		const t = T();
+		$("repo").href = $("gh").href = REPO_URL;
+		$("gh").title = t.repo;
+		$("repo").textContent = t.repo;
+		$("siblings").replaceChildren(h("span", { text: t.siblings }),
+			...SIBLINGS.map(([name, url, key]) => h("span", { class: "sib" }, link(url, name, t[key]), h("span", { class: "sib-desc", text: " — " + t[key] }))));
+	}
 	function render() {
-		shell(); online();
+		shell(); online(); links();
 		$("app").replaceChildren(({
 			send: sendScreen, listen: listenScreen,
 			cables: textScreen(() => T().cables, () => T().cableText),

@@ -21,8 +21,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
 /* top */
 .badge { white-space: nowrap; font-size: 11px; font-weight: 650; padding: 1px 7px; border-radius: 99px; background: var(--warn-bg); color: var(--warn-fg); cursor: help; }
-.net-wrap { position: relative; }
-.net { font-size: 13px; font-weight: 700; cursor: help; border: 0; border-radius: 99px; padding: 4px 11px; }
+.net-wrap { position: relative; flex: none; }
+.net { white-space: nowrap; font-size: 13px; font-weight: 700; cursor: help; border: 0; border-radius: 99px; padding: 4px 11px; }
 .net.off { background: none; color: var(--ok); }
 /* online is the dangerous state: a solid red pill that pulses, hard to miss */
 .net.on { background: var(--danger-bg); color: var(--danger-fg); animation: net-pulse 1.6s ease-in-out infinite; }
@@ -37,18 +37,18 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .net-why b { display: block; margin-bottom: 4px; }
 .net.on + .net-why { border-color: var(--danger-bg); }
 .net-wrap:hover .net-why, .net:focus-visible + .net-why, .net-why.open { display: block; }
-header.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+header.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; flex-wrap: nowrap;
 	padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
-.brand { display: flex; align-items: baseline; gap: 10px; cursor: pointer; min-width: 0; }
+.brand { display: flex; align-items: baseline; gap: 10px; cursor: pointer; min-width: 0; flex: 1 1 auto; overflow: hidden; }
 .brand b { font-size: 18px; letter-spacing: -0.3px; white-space: nowrap; }
 .brand b span { color: var(--accent); }
-.brand small { color: var(--muted); font-size: 13px; }
-.tabs { display: flex; gap: 2px; background: var(--soft); border-radius: 8px; padding: 3px; margin-left: auto; }
+.brand small { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tabs { display: flex; gap: 2px; background: var(--soft); border-radius: 8px; padding: 3px; flex: none; }
 .tabs button { border: 0; background: none; padding: 5px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; color: var(--muted); }
 .tabs button.on { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
-.pill { border: 1px solid var(--line); background: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; }
+.pill { border: 1px solid var(--line); background: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; color: var(--fg); text-decoration: none; white-space: nowrap; flex: none; }
 @media (max-width: 640px) {
-	header.top { position: relative; gap: 8px 12px; }
+	header.top { position: relative; gap: 8px 12px; flex-wrap: wrap; }
 	.net-wrap { position: static; }
 	.net-why { left: 12px; right: 12px; width: auto; top: calc(100% + 4px); }
 	.brand { flex: 1; }
@@ -71,7 +71,11 @@ header.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: c
 .page h2 { margin: 0 0 8px; font-size: 20px; }
 .page .item { border-top: 1px solid var(--line); padding: 10px 0; }
 .page .item b { display: block; margin-bottom: 2px; }
-footer { text-align: center; padding: 4px 0 24px; color: var(--muted); font-size: 13px; }
+footer { text-align: center; padding: 4px 16px 24px; color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+footer a { color: var(--muted); }
+.siblings { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; }
+.siblings a { color: var(--accent); font-weight: 600; }
+@media (max-width: 640px) { .sib-desc { display: none; } }
 footer button { background: none; border: 0; color: var(--muted); cursor: pointer; text-decoration: underline; }
 
 /* text */

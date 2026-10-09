@@ -4,6 +4,10 @@
 const UR_TONES_TEXT = {
 	en: {
 		langName: "Español", langSwitch: "es",
+		repo: "Source code (GitHub)", siblings: "Sister projects:",
+		sibNds: "an air-gapped signer for the Nintendo DSi, that listens to and plays these tones",
+		sibSeedcraft: "seeds kept as strings of things (beads, bricks, cards…)",
+		sibUrTones: "PSBTs and seeds as telephone tones, by cable or through the air",
 		subtitle: "PSBTs and seeds as telephone tones",
 		warnTest: "⚠️ Draft format, for testing: never type or play the seed of real funds on a computer.",
 		warnOnline: "📡 This computer is online. The page cannot connect anywhere, but a seed should only be handled offline.",
@@ -86,6 +90,10 @@ const UR_TONES_TEXT = {
 	},
 	es: {
 		langName: "English", langSwitch: "en",
+		repo: "Código fuente (GitHub)", siblings: "Proyectos hermanos:",
+		sibNds: "un firmador sin conexión para la Nintendo DSi, que escucha y emite estos tonos",
+		sibSeedcraft: "semillas guardadas como ristras de cosas (cuentas, piezas, cartas…)",
+		sibUrTones: "PSBT y semillas como tonos de teléfono, por cable o al aire",
 		subtitle: "PSBT y semillas como tonos de teléfono",
 		warnTest: "⚠️ Formato en borrador, para pruebas: nunca escribas ni reproduzcas en un ordenador la semilla de fondos reales.",
 		warnOnline: "📡 Este ordenador está conectado. La página no puede conectarse a nada, pero una semilla solo debe tratarse sin conexión.",
