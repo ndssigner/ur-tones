@@ -179,8 +179,10 @@ wrong PIN gives a different, valid (empty) wallet.
 What it is for: **someone overhearing or recording the tones** (through the
 air, or a recording that is found) gets a seed that is not yours unless they
 also know the PIN. Each guess costs 10 000 HMACs, but a short PIN can be
-guessed: use 8 characters or more. It is not a replacement for a BIP-39
-passphrase.
+guessed offline from a recording: use 8 characters or more for a transfer,
+and **12 or more** for a recording kept as a backup, which an attacker may
+attack at leisure (docs/why.md has the figures). It is not a replacement
+for a BIP-39 passphrase.
 
 **Making one up.** People choose guessable PINs, so either side may make one
 up and show it, for the other side to type by hand: 8 characters from

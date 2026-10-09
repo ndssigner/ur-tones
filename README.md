@@ -12,6 +12,14 @@ air-gapped signer for the Nintendo DSi), but meant for any wallet or signer.
 Its sister project, [Seedcraft](https://github.com/ndssigner/seedcraft),
 backs seeds up as sequences of things.
 
+**Why:** an air-gapped signer that needs no camera and no screen able to
+show QR codes — a microcontroller, a small OLED, a microphone and a
+speaker (or a headset jack) — and that can trade data with offline audio
+gear (cassette, MiniDisc, MP3 players, voice recorders); plus seed backups
+as tones encrypted with a PIN. See [docs/why.md](docs/why.md)
+([español](docs/es/por-que.md)): SeedSigner compared with a ur-tones
+signer, the devices it works with, and the backup's limits.
+
 > ⚠️ **Draft.** The format can still change. Do not move the seed of real funds
 > with a draft format.
 
