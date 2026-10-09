@@ -251,11 +251,16 @@
 	}
 
 	// ---- listening -----------------------------------------------------
-	const mic = { ctx: null, stream: null, proc: null };
+	// A fresh AudioContext each time, and every node kept referenced while in use:
+	// a reused context (or a source node collected by the garbage collector) can
+	// stay silent after the microphone is stopped and started again.
+	const mic = { ctx: null, stream: null, src: null, proc: null };
 	function stopMic() {
-		if (mic.proc) mic.proc.disconnect();
+		if (mic.proc) { mic.proc.onaudioprocess = null; mic.proc.disconnect(); }
+		if (mic.src) mic.src.disconnect();
 		if (mic.stream) mic.stream.getTracks().forEach((tr) => tr.stop());
-		mic.proc = mic.stream = null;
+		if (mic.ctx) mic.ctx.close().catch(() => {});
+		mic.ctx = mic.stream = mic.src = mic.proc = null;
 	}
 
 	function listenScreen() {
@@ -264,7 +269,7 @@
 		const meter = h("div", {}), heard = h("div", { class: "keys heard" }), list = h("div", { class: "frames" });
 		const progress = h("div", { class: "progress" }, h("div", {})), progressText = h("div", { class: "help" });
 		const result = h("div", {}), err = h("div", {});
-		const micBtn = h("button", { class: "btn" }, t.mic);
+		const micBtn = h("button", { class: "btn" }, t.mic), micState = h("div", { class: "help" });
 		// optional recording of what the microphone hears, for bug reports:
 		// about 8 kHz, 16 bits, 10 minutes at most (about 10 MB)
 		const rec = { on: false, rate: 0, dec: 1, pend: [], chunks: [], n: 0, max: 0 };
@@ -295,7 +300,7 @@
 			list.prepend(h("div", { class: ok ? "ok" : "bad", text }));
 			while (list.children.length > 8) list.lastChild.remove();
 		}
-		function finish(node) { L.done = true; stopMic(); micBtn.textContent = t.mic; result.replaceChildren(node); result.scrollIntoView({ behavior: "smooth" }); }
+		function finish(node) { L.done = true; stopMic(); micBtn.textContent = t.mic; micState.textContent = ""; result.replaceChildren(node); result.scrollIntoView({ behavior: "smooth" }); }
 		function gotMessage(type, cbor, ur) {
 			if (type === "crypto-psbt" || type === "psbt") {
 				const psbt = TN.cborToPsbt(cbor), b64 = toBase64(psbt);
@@ -347,21 +352,35 @@
 		function reset() { L.decoder = null; L.done = false; result.replaceChildren(); list.replaceChildren(); heard.textContent = ""; progressText.textContent = ""; progress.firstChild.style.width = "0"; err.replaceChildren(); }
 
 		micBtn.addEventListener("click", async () => {
-			if (mic.stream) { stopMic(); micBtn.textContent = t.mic; return; }
+			if (mic.stream) { stopMic(); micBtn.textContent = t.mic; micState.textContent = ""; return; }
 			reset();
+			micBtn.disabled = true;
+			micState.className = "help"; micState.textContent = t.micStarting;
 			try {
 				mic.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-			} catch (e) { err.replaceChildren(h("div", { class: "error", text: t.micDenied })); return; }
-			mic.ctx = mic.ctx || new AudioContext();
-			mic.ctx.resume();
+			} catch (e) {
+				micBtn.disabled = false; micState.textContent = "";
+				err.replaceChildren(h("div", { class: "error", text: t.micDenied })); return;
+			} finally { micBtn.disabled = false; }
+			if (!micBtn.isConnected) { stopMic(); return; }   // left this screen meanwhile
+			mic.ctx = new AudioContext();
+			await mic.ctx.resume().catch(() => {});
 			const listener = newListener(mic.ctx.sampleRate);
-			const src = mic.ctx.createMediaStreamSource(mic.stream);
-			mic.proc = mic.ctx.createScriptProcessor(4096, 1, 1);
+			mic.src = mic.ctx.createMediaStreamSource(mic.stream);
+			mic.proc = mic.ctx.createScriptProcessor(2048, 1, 1);
+			let ready = false;
 			Object.assign(rec, { rate: mic.ctx.sampleRate, dec: Math.max(1, Math.floor(mic.ctx.sampleRate / 8000)), pend: [], chunks: [], n: 0 });
 			rec.max = Math.floor(600 * rec.rate / rec.dec);
 			recSave.disabled = true; recInfo.textContent = "";
-			mic.proc.onaudioprocess = (e) => { const x = e.inputBuffer.getChannelData(0); listener.push(x); record(x); };
-			src.connect(mic.proc); mic.proc.connect(mic.ctx.destination);
+			mic.proc.onaudioprocess = (e) => {
+				const x = e.inputBuffer.getChannelData(0);
+				if (!ready && x.some((v) => v !== 0)) {   // the first real sound: from now on nothing is lost
+					ready = true;
+					micState.className = "note"; micState.textContent = t.micReady;
+				}
+				listener.push(x); record(x);
+			};
+			mic.src.connect(mic.proc); mic.proc.connect(mic.ctx.destination);
 			micBtn.textContent = t.micStop;
 		});
 		const wavInput = h("input", { type: "file", accept: ".wav,audio/wav", class: "hidden", on: { change: async (e) => {
@@ -380,6 +399,7 @@
 			h("h2", { text: "👂 " + t.listen }),
 			h("p", { class: "help", text: t.micHelp }),
 			h("div", { class: "row" }, micBtn, h("button", { class: "btn ghost", on: { click: () => wavInput.click() } }, t.openWav), wavInput),
+			micState,
 			err,
 			h("details", { class: "more" }, h("summary", { text: t.pinTitle }), h("p", { class: "help", text: t.pinHelp }), pin),
 			h("details", { class: "more" }, h("summary", { text: "🎙️ " + t.recTitle }), h("p", { class: "help", text: t.recHelp }),
