@@ -196,7 +196,7 @@ details.more > * + * { margin-top: 8px; }
 	padding: 16px 16px 12px; box-shadow: var(--tray); }
 .pad-grid { display: grid; grid-template-columns: 44px repeat(4, 1fr); gap: 7px; align-items: center; }
 .pad-hz { font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
-.pad-hz.row { text-align: right; padding-right: 4px; }
+.pad-hz.low { text-align: right; padding-right: 4px; }
 .pad-key { aspect-ratio: 1.15; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--sunk); cursor: pointer;
 	font-family: var(--round); font-size: 22px; font-weight: 700; color: var(--fg); box-shadow: 0 2px 0 var(--line-strong);
 	transition: background .08s, transform .08s, box-shadow .08s; }

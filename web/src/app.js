@@ -470,7 +470,7 @@
 		};
 		const [low, high] = [PAD.map((r) => TN.FREQS[r[0]][0]), [...PAD[0]].map((k) => TN.FREQS[k][1])];
 		const grid = h("div", { class: "pad-grid" }, h("span", {}), high.map((f) => h("span", { class: "pad-hz", text: f + " Hz" })),
-			PAD.flatMap((row, r) => [h("span", { class: "pad-hz row", text: low[r] + " Hz" }),
+			PAD.flatMap((row, r) => [h("span", { class: "pad-hz low", text: low[r] + " Hz" }),
 				[...row].map((k) => { const b = h("button", { class: "pad-key" + (/[A-D]/.test(k) ? " abcd" : ""), "aria-label": t.padKey(k, ...TN.FREQS[k]), text: k });
 					b.addEventListener("click", () => press(k, b)); return b; })].flat()));
 		return h("figure", { class: "pad" }, grid, h("figcaption", { text: t.padCaption }));

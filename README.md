@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.png">
+  <img src="docs/images/hero-light.png" alt="ur-tones — PSBTs and seeds as telephone tones: the 16 DTMF keys with their row and column frequencies">
+</picture>
+
 # ur-tones
 
 Move Bitcoin data — PSBTs, seeds, xpubs, descriptors — as **telephone tones
@@ -91,7 +96,8 @@ python3 tests/test_reference.py      # the Python reference
 python3 tests/test_c.py              # the C library (needs cc)
 node web/test.mjs                    # the JavaScript (Node.js ≥ 18)
 node web/build.mjs                   # dist/ur-tones.html + its SHA-256
-python3 tools/bundle.py v0.1.0       # the release zip, reproducible
+python3 tools/bundle.py v0.2.0       # the release zip, reproducible
+python3 tools/readme_hero.py         # this README's picture (needs Chrome)
 ```
 
 Recordings help most: if the tool misses tones in your setup, record what
