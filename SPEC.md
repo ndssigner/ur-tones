@@ -179,15 +179,16 @@ wrong PIN gives a different, valid (empty) wallet.
 What it is for: **someone overhearing or recording the tones** (through the
 air, or a recording that is found) gets a seed that is not yours unless they
 also know the PIN. Each guess costs 10 000 HMACs, but a short PIN can be
-guessed offline from a recording: use 8 characters or more for a transfer,
-and **12 or more** for a recording kept as a backup, which an attacker may
-attack at leisure (docs/why.md has the figures). It is not a replacement
-for a BIP-39 passphrase.
+guessed offline by whoever has a recording (a backup, or a transfer through
+the air that was recorded): use **12 characters or more**; a shorter one is
+fine by cable (docs/why.md has the figures). Receivers accept any length,
+and may warn below 12. It is not a replacement for a BIP-39 passphrase.
 
 **Making one up.** People choose guessable PINs, so either side may make one
-up and show it, for the other side to type by hand: 8 characters from
+up and show it, for the other side to type by hand: 12 characters from
 `23456789ABCDEFGHJKLMNPQRSTUVWXYZ` (no 0/O or 1/I to confuse; 32 symbols, so
-a random byte modulo 32 is unbiased), 40 bits. The reference web tool uses
+a random byte modulo 32 is unbiased), 60 bits, shown in three groups of four
+(`K7MP 3XQA 9RTW`) and typed without the spaces. The reference web tool uses
 the browser's cryptographic generator; NDS-Signer hashes a second of
 microphone noise with SHA-256. Since the PIN is just letters and digits, a
 made-up PIN needs nothing else from the receiver: it is typed like any other.

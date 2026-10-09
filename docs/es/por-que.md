@@ -109,11 +109,12 @@ Conviene ser honesto con sus límites:
   sabe lo que es. Cada intento cuesta 10 000 HMAC-SHA256 (el PIN) más las
   derivaciones BIP-39 y BIP-32 y buscar las direcciones resultantes. Como
   orden de magnitud, a un millón de intentos por segundo (unas pocas GPU
-  potentes): **un PIN inventado de 8 caracteres (40 bits) cae en menos de
-  dos semanas**; **12 caracteres (60 bits) llevan decenas de miles de
-  años**; 16 caracteres quedan fuera de alcance. Para una copia que puede
-  pasar años guardada, usa **12 caracteres o más**, o añade una passphrase
-  BIP-39 guardada con el PIN.
+  potentes): **un PIN de 8 caracteres (40 bits) cae en menos de dos
+  semanas**; **12 caracteres (60 bits) llevan decenas de miles de años**;
+  16 quedan fuera de alcance. Así que usa **12 caracteres o más**: el PIN
+  que inventan la herramienta web y NDS-Signer (🎲) tiene 12, en tres
+  grupos de cuatro, y de todos modos se apunta, así que su longitud no
+  cuesta nada recordarla. Se aceptan PIN más cortos, con un aviso.
 - **Fuera de internet.** Una grabación en la nube o en un correo es una
   grabación que cualquiera puede copiar y atacar con calma.
 - **Los soportes envejecen.** Las cintas se estiran, los CD-R se degradan,

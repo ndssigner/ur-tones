@@ -102,10 +102,12 @@ Be honest with yourself about its limits:
   knows what it is. Each guess costs 10,000 HMAC-SHA256 (the PIN) plus the
   BIP-39 and BIP-32 derivations and a lookup of the resulting addresses.
   As an order of magnitude, at a million guesses per second (a few
-  high-end GPUs): a **made-up 8-character PIN (40 bits) falls within two
-  weeks**; **12 characters (60 bits) take tens of thousands of years**; 16
-  characters are out of reach. For a backup that may sit for years, use **12
-  characters or more**, or add a BIP-39 passphrase kept with the PIN.
+  high-end GPUs): an **8-character PIN (40 bits) falls within two weeks**;
+  **12 characters (60 bits) take tens of thousands of years**; 16 are out
+  of reach. So use **12 characters or more**: the PIN that the web tool
+  and NDS-Signer make up (🎲) has 12, in three groups of four, and is
+  written down anyway, so its length costs nothing to remember. Shorter
+  PINs are accepted, with a warning.
 - **Keep it off the internet.** A recording in cloud storage or e-mail is a
   recording anyone may copy and attack at leisure.
 - **Media age.** Tapes stretch, CD-Rs fade, files rot. Keep two copies on

@@ -45,16 +45,19 @@
 		setTimeout(() => { value.textContent = fingerprintOf(entropy); }, 30);
 		return h("div", { class: "fp" }, h("div", { class: "fp-label", text: t.fingerprint }), value, h("p", { class: "help", text: help }));
 	}
-	// A made-up PIN (SPEC §4): 8 characters without 0/O or 1/I, 40 bits; 32 divides 256, so no bias
-	const PIN_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-	const makePin = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => PIN_ALPHABET[b % 32]).join("");
+	// A made-up PIN (SPEC §4): 12 characters without 0/O or 1/I, 60 bits; 32 divides 256, so no bias.
+	// Shown in groups of 4, typed without the spaces. Shorter PINs are accepted, with a warning.
+	const PIN_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ", PIN_LENGTH = 12;
+	const makePin = () => Array.from(crypto.getRandomValues(new Uint8Array(PIN_LENGTH)), (b) => PIN_ALPHABET[b % 32]).join("");
+	const groups = (pin) => pin.match(/.{1,4}/g).join(" ");
 	// The PIN box, and 🎲 to make one up here and type it on the other device
 	// (st.pin, and st.made: the PIN made up here, shown big until it is edited)
 	function pinField(st, onChange) {
 		const t = T();
 		const shown = h("div", { class: "pin-made" });
 		const show = () => shown.replaceChildren(...(st.pin && st.pin === st.made
-			? [h("div", { class: "pin-big", text: st.pin }), h("p", { class: "help", text: t.pinMadeHelp })] : []));
+			? [h("div", { class: "pin-big", text: groups(st.pin) }), h("p", { class: "help", text: t.pinMadeHelp })]
+			: st.pin && st.pin.length < PIN_LENGTH ? [h("p", { class: "help warn", text: t.pinShort })] : []));
 		const input = h("input", { class: "pin", autocomplete: "off", autocapitalize: "characters", spellcheck: "false", placeholder: "PIN", value: st.pin,
 			on: { input: (e) => { st.pin = cleanPin(e.target.value); e.target.value = st.pin; show(); },
 				change: () => onChange && onChange() } });
@@ -217,7 +220,7 @@
 			}
 			options.append(h("h3", { text: t.pace }),
 				seg([["cable", t.paceCable, t.paceCableHelp], ["air", t.paceAir, t.paceAirHelp]], s.pace, (v) => { s.pace = v; }));
-			if (input.kind === "seed" && s.pace === "air") options.append(h("div", { class: s.pin.length >= 8 ? "note" : "error", text: s.pin.length >= 8 ? t.airSeedPin : t.airSeed }));
+			if (input.kind === "seed" && s.pace === "air") options.append(h("div", { class: s.pin ? "note" : "error", text: s.pin ? t.airSeedPin : t.airSeed }));
 			const pace = paceFor(input, s), gen = frames(input, s);
 			const round = Array.from({ length: roundLength(input) }, () => gen.next().value);
 			const secs = round.reduce((a, f) => a + f.length * (pace.tone + pace.gap) + 2 * pace.pause, 0) / 1000;

@@ -172,3 +172,4 @@ textarea.seed[readonly] { font-size: 14px; min-height: 120px; }
 .fp-label { color: var(--muted); font-size: 14px; }
 .fp-value { font-family: var(--mono); font-size: 32px; font-weight: 800; letter-spacing: 3px; color: var(--accent); }
 .fp .help { margin: 4px 0 0; }
+.help.warn { color: var(--warn-fg); background: var(--warn-bg); padding: 4px 8px; border-radius: 8px; }
