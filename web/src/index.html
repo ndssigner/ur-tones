@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- This page may not load or send anything: no network at all, only its own
+     inline script and style (identified by their SHA-256 hashes). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src '{{SCRIPT_HASH}}'; style-src '{{STYLE_HASH}}'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ur-tones — PSBTs and seeds as telephone tones</title>
+<style>{{STYLE}}</style>
+</head>
+<body data-format-version="{{FORMAT_VERSION}}">
+<div class="bar warn" id="warn"></div>
+<div class="bar online hidden" id="online"></div>
+<div class="wrap">
+	<header class="top">
+		<div class="logo" id="logo">🎵 ur-<span>tones</span></div>
+		<div class="tagline" id="tagline"></div>
+		<button class="pill" id="lang"></button>
+	</header>
+	<main id="app"></main>
+	<footer><button id="about"></button></footer>
+</div>
+<script>{{SCRIPT}}</script>
+</body>
+</html>

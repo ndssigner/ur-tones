@@ -1,0 +1,81 @@
+# Tests the reference implementation and the web tool against the test
+# vectors, builds the web tool and the release zip (reproducible: compare the
+# printed SHA-256 with a local build of the same commit). On main, publishes
+# the web tool on GitHub Pages; on a version tag (v*), drafts a release.
+name: test-and-build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Python reference against the vectors (and audio)
+        run: python3 tests/test_reference.py
+      - name: JavaScript against the vectors (and audio)
+        run: node web/test.mjs
+      - name: Build the web tool
+        run: node web/build.mjs
+      - name: Bundle (tag name, or dev-<commit> between releases)
+        run: |
+          case "$GITHUB_REF" in refs/tags/v*) v="$GITHUB_REF_NAME" ;; *) v="dev-$(echo "$GITHUB_SHA" | cut -c1-12)" ;; esac
+          python3 tools/bundle.py "$v"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ur-tones
+          path: |
+            dist/ur-tones-*.zip
+            dist/SHA256SUMS
+      - name: The site for GitHub Pages
+        run: mkdir site && cp dist/ur-tones.html site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  pages:
+    if: github.ref == 'refs/heads/main'
+    needs: test-and-build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test-and-build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ur-tones
+      - name: Draft release (published by hand after checking the hash)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" ur-tones-*.zip SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --draft --prerelease \
+            --title "ur-tones $GITHUB_REF_NAME" \
+            --notes "Web tool (EN/ES) and specification. Draft: test seeds and testnet PSBTs only. Verify: sha256sum -c SHA256SUMS"
