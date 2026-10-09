@@ -81,7 +81,7 @@ mano.
 | Reproductores MP3 con grabadora de voz, grabadoras digitales (dictáfonos) | ✓ | ✓ | Llevar PSBT en los dos sentidos; copia de la semilla | Lo que mejor encaja: reproducen y graban, sin red; sin probar |
 | Móvil clásico (sin SIM, o en modo avión) | ✓ | ✓ (notas de voz) | Grabar y reproducir; teclear una semilla a mano en modo teclado | Sus tonos de tecla tienen que ser DTMF de verdad; nunca con SIM y en llamada (la red los oye) |
 | Un portátil, móvil o tableta sin conexión con la herramienta web | ✓ | ✓ | Todo: la herramienta web reproduce y escucha | **Probado** (navegadores, por cable y al aire) |
-| Nintendo DSi con NDS-Signer | — (próximamente) | ✓ (escucha) | Recibir PSBT y semillas | **Probado** en una DSi de verdad; enviar tonos viene después |
+| Nintendo DSi con NDS-Signer | ✓ (emite) | ✓ (escucha) | Recibir PSBT y semillas; enviar la PSBT firmada, y una semilla con su PIN | Escuchar, **probado** en una DSi de verdad; emitir es nuevo |
 
 "Sin probar" significa eso: pruébalo con una semilla **de prueba** o una
 PSBT de testnet antes de fiarte, y si falla, graba lo que se oye

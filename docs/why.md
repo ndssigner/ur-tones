@@ -77,7 +77,7 @@ and the computer, to **keep** a backup, or to **key** a seed by hand.
 | MP3 players with a voice recorder, digital voice recorders (dictaphones) | ✓ | ✓ | Carrying PSBTs both ways; seed backup | The closest fit: play and record, no network; untested |
 | Feature phone (no SIM, or flight mode) | ✓ | ✓ (voice memos) | Recording and playing; keying a seed by hand in keypad mode | Its key tones must be real DTMF; never with a SIM in a call (the network hears them) |
 | An offline laptop, phone or tablet with the web tool | ✓ | ✓ | Everything: the web tool plays and listens | **Tested** (browsers, by cable and through the air) |
-| Nintendo DSi with NDS-Signer | — (next) | ✓ (listens) | Receiving PSBTs and seeds | **Tested** on a real DSi; sending tones comes next |
+| Nintendo DSi with NDS-Signer | ✓ (plays) | ✓ (listens) | Receiving PSBTs and seeds; sending the signed PSBT, and a seed with its PIN | Listening **tested** on a real DSi; playing is new |
 
 "Untested" means just that: try it with a **test** seed or a testnet PSBT
 before trusting it, and if it fails, record what was heard (*Listen →
