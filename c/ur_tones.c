@@ -395,7 +395,7 @@ static int parse_ur(const char *text, ur_t *u)
 	size_t len = 0, slash[3], ns = 0;
 	while (*text == ' ' || *text == '\n' || *text == '\r' || *text == '\t') text++;
 	for (; text[len] && !(text[len] == ' ' || text[len] == '\n' || text[len] == '\r'); len++) {
-		if (len + 1 >= sizeof t) return UT_ERR_UR;
+		if (len + 1 >= sizeof t) return UT_ERR_TOO_LONG; /* longer than any one frame's UR */
 		char ch = text[len];
 		t[len] = (char)((ch >= 'A' && ch <= 'Z') ? ch + 32 : ch);
 		if (t[len] == '/') { if (ns == 3) return UT_ERR_UR; slash[ns++] = len; }
@@ -412,7 +412,8 @@ static int parse_ur(const char *text, ur_t *u)
 	u->kind = ns == 1 ? KIND_SINGLE : KIND_PART;
 	const char *words = t + slash[ns - 1] + 1;
 	size_t wl = len - slash[ns - 1] - 1;
-	if (wl % 2 || wl < 10 || wl / 2 - 4 > sizeof u->body) return UT_ERR_UR;
+	if (wl % 2 || wl < 10) return UT_ERR_UR;
+	if (wl / 2 - 4 > sizeof u->body) return UT_ERR_TOO_LONG;
 	uint8_t all[sizeof u->body + 4];
 	for (size_t i = 0; i < wl / 2; i++) {
 		int b = byteword(words[2 * i], words[2 * i + 1]);

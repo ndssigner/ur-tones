@@ -51,6 +51,7 @@ const UR_TONES_TEXT = {
 		detected: {
 			psbt: (bytes, parts) => `PSBT, ${bytes} bytes → ${parts === 1 ? "1 frame" : `${parts} parts, in a loop`}`,
 			urs: (n, type) => `${n} UR ${n === 1 ? "text" : "parts"}, ${type}`,
+			long: (n, type) => `1 UR text, ${type}: too long for one frame, sent as ${n} parts`,
 			seed: (n) => `Seed, ${n} words — TEST seeds only`,
 			bad: "Not a PSBT, a UR or a seed (12 or 24 BIP-39 English words)",
 		},
@@ -161,6 +162,7 @@ const UR_TONES_TEXT = {
 		detected: {
 			psbt: (bytes, parts) => `PSBT, ${bytes} bytes → ${parts === 1 ? "1 trama" : `${parts} partes, en bucle`}`,
 			urs: (n, type) => `${n === 1 ? "1 texto UR" : `${n} partes UR`}, ${type}`,
+			long: (n, type) => `1 texto UR, ${type}: no cabe en una trama, va en ${n} partes`,
 			seed: (n) => `Semilla, ${n} palabras — solo semillas de PRUEBA`,
 			bad: "No es una PSBT, un UR ni una semilla (12 o 24 palabras BIP-39 en inglés)",
 		},

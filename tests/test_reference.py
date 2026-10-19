@@ -96,6 +96,16 @@ def main():
             # two lost tones: discarded, never misread
             bad = frame[:10] + frame[11:30] + frame[31:]
             check(raises(st.frame_to_ur, bad) or st.frame_to_ur(bad)[0] == ur, "two lost tones not misread " + name)
+        if "fits_one_frame" in v:
+            # the whole message as one UR: one frame if it fits; if not, refused (it goes in parts)
+            if v["fits_one_frame"]:
+                check(st.frame_to_ur(st.ur_to_frame(v["ur"])) == (v["ur"], 0), "whole UR in one frame " + name)
+            else:
+                try:
+                    st.ur_to_frame(v["ur"])
+                    check(False, "whole UR too long refused " + name)
+                except ValueError:
+                    check(True, "whole UR too long refused " + name)
 
     # audio: a keypad seed, a seed frame and a PSBT frame, in one recording
     seed = next(v for v in VECTORS if v.get("pin") is None and "keypad" in v)

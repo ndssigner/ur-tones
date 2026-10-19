@@ -160,6 +160,101 @@
    ]
   },
   {
+   "name": "BIP-39 test seed, BIP-84 account xpub",
+   "type": "crypto-hdkey",
+   "cbor": "a503582102707a62fdacc26ea9b63b1c197906f56ee0180d0bcf1966e1a2da34f5f3a09a9b0458204a53a0ab21b9dc95869c4e92a161194e03c0ef3ff5014ac692f433c4765490fc05d90131a20100020006d90130a301861854f500f500f5021a73c5da0a0303081a7ef32bdb",
+   "xpub": "xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V",
+   "ur": "ur:crypto-hdkey/onaxhdclaojoknidzcpssajtptrpfrcecfkkamykjtvtcsbtbdtkcfiyvyoetneeykwfnbnyndaahdcxgegunbpyclrhuomdlnnsglmooyhscfglaxrtwsfhykadgeswmowkeosskoghmhztahtaadehoeadaeaoaeamtaaddyotadlncsghykaeykaeykaocyjksktnbkaxaxaycykbwfdnuyiobkrovw",
+   "fits_one_frame": true,
+   "fragment": 100,
+   "urs": [
+    "ur:crypto-hdkey/1-2/lpadaocsjncyiobkrovwhdemonaxhdclaojoknidzcpssajtptrpfrcecfkkamykjtvtcsbtbdtkcfiyvyoetneeykwfnbnyndaahdcxgegunbpyclrhuomdlnnsglmooyhscfcxroqdtn",
+    "ur:crypto-hdkey/2-2/lpaoaocsjncyiobkrovwhdemglaxrtwsfhykadgeswmowkeosskoghmhztahtaadehoeadaeaoaeamtaaddyotadlncsghykaeykaeykaocyjksktnbkaxaxaycykbwfdnuyaeadmwbnck",
+    "ur:crypto-hdkey/3-2/lpaxaocsjncyiobkrovwhdemglaxrtwsfhykadgeswmowkeosskoghmhztahtaadehoeadaeaoaeamtaaddyotadlncsghykaeykaeykaocyjksktnbkaxaxaycykbwfdnuyaefdkioyad",
+    "ur:crypto-hdkey/4-2/lpaaaocsjncyiobkrovwhdemonaxhdclaojoknidzcpssajtptrpfrcecfkkamykjtvtcsbtbdtkcfiyvyoetneeykwfnbnyndaahdcxgegunbpyclrhuomdlnnsglmooyhscfmdlnpsya",
+    "ur:crypto-hdkey/5-2/lpahaocsjncyiobkrovwhdemonaxhdclaojoknidzcpssajtptrpfrcecfkkamykjtvtcsbtbdtkcfiyvyoetneeykwfnbnyndaahdcxgegunbpyclrhuomdlnnsglmooyhscfuojladvd"
+   ],
+   "frames": [
+    "CBAD*#868D136D6B*7AD549AD01C5#78#A090424B31690C23C702#39DBD*68B7C*9245408B#914#C5B*5A8D15*AD1*BC4BD2B03493281*0158#7A4D01385871049BD562363BA1783BA412#8D5*A7A7#D3839#969#6325C36DCD*7867*#5898B*6A5C0B86#673A#64B08*31C1A1A5C987",
+    "CBAD*#868D136D8#2B*198D*145093BC3*4D0#5091C3B9*B24618137D9DB30CB43D5B3B#02CB*5*9BA534*09A46#12B78A05C#A9176D*BD18AC26703A0AD2364A#7AB1C386156A6*7*62ADB6789CD#*46245D7DB217A0B14C5AC5C2*67*9C6BC01*D#4#282#8DA0#76592#*#171#2C63",
+    "CBAD*#868D136DA36#25DC125894D7#072814394D507#D2#68A5C57B1D1#740#8719#7#3460#292D#*97824D*8A356#BC*4903*D5BA12#15C*06AB47*4*167A8*3B*#507CA59A*A2B2A6*1#ABCD129037DC58A0B*1B01A412D67895C0#D#86AC2#19D204A#A4C6B#2BA923204A98C01C",
+    "CBAD*#868D136DC7A36910569CD81B34B6C5C0*07#D25C8*#83C*B#5979A24738A5*010C47B5D0B817A1649D1A69DA78079*7C#05#*4DACD14B3609CD#4143DC057912*#2#76D34#760D*B491A6452CD#81*52069C84C*028137987368*C6801686C5C9C35D4723C14*705*AD7#23CB*",
+    "CBAD*#868D136*0D09C#76BC#23*719A1C2B2646D538B2*45*92415B#D#08AD9*0B46762AD1B361*7D07CA#370C#30D*6D#4D256B54A30237A19C6#235A7A9326BD#784585DC39A5DC6341A#70C9B*0A*78252BA10746C*#2D84DC#1A6#AD41B278291D0895C6910A153C87147A57A01"
+   ]
+  },
+  {
+   "name": "BIP-39 test seed, BIP-84 output descriptor",
+   "type": "crypto-output",
+   "cbor": "d90194d9012fa603582102707a62fdacc26ea9b63b1c197906f56ee0180d0bcf1966e1a2da34f5f3a09a9b0458204a53a0ab21b9dc95869c4e92a161194e03c0ef3ff5014ac692f433c4765490fc05d90131a20100020006d90130a301861854f500f500f5021a73c5da0a030307d90130a1018400f480f4081a7ef32bdb",
+   "descriptor": "wpkh([73c5da0a/84'/0'/0']xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V/0/*)#wc3n3van",
+   "ur": "ur:crypto-output/taadmwtaaddlolaxhdclaojoknidzcpssajtptrpfrcecfkkamykjtvtcsbtbdtkcfiyvyoetneeykwfnbnyndaahdcxgegunbpyclrhuomdlnnsglmooyhscfglaxrtwsfhykadgeswmowkeosskoghmhztahtaadehoeadaeaoaeamtaaddyotadlncsghykaeykaeykaocyjksktnbkaxaxattaaddyoyadlraewklawkaycykbwfdnuyludarnox",
+   "fits_one_frame": true,
+   "fragment": 100,
+   "urs": [
+    "ur:crypto-output/1-2/lpadaocskbcyludarnoxhdfhtaadmwtaaddlolaxhdclaojoknidzcpssajtptrpfrcecfkkamykjtvtcsbtbdtkcfiyvyoetneeykwfnbnyndaahdcxgegunbpyclrhuomdlnnsglmooyhscfglaxbyoxytfe",
+    "ur:crypto-output/2-2/lpaoaocskbcyludarnoxhdfhrtwsfhykadgeswmowkeosskoghmhztahtaadehoeadaeaoaeamtaaddyotadlncsghykaeykaeykaocyjksktnbkaxaxattaaddyoyadlraewklawkaycykbwfdnuycxjtaaqd",
+    "ur:crypto-output/3-2/lpaxaocskbcyludarnoxhdfhrtwsfhykadgeswmowkeosskoghmhztahtaadehoeadaeaoaeamtaaddyotadlncsghykaeykaeykaocyjksktnbkaxaxattaaddyoyadlraewklawkaycykbwfdnuystclvwvs",
+    "ur:crypto-output/4-2/lpaaaocskbcyludarnoxhdfhrtwsfhykadgeswmowkeosskoghmhztahtaadehoeadaeaoaeamtaaddyotadlncsghykaeykaeykaocyjksktnbkaxaxattaaddyoyadlraewklawkaycykbwfdnuyckhlgapk",
+    "ur:crypto-output/5-2/lpahaocskbcyludarnoxhdfhtaadmwtaaddlolaxhdclaojoknidzcpssajtptrpfrcecfkkamykjtvtcsbtbdtkcfiyvyoetneeykwfnbnyndaahdcxgegunbpyclrhuomdlnnsglmooyhscfglaxftkkjopy"
+   ],
+   "frames": [
+    "CBAD*#84B05D070581481A0A*4#*809C3*5704B7#AD36D60A#3C#071270*6C1C4C6D4D269B36B*3151B*404AD#AB3501306*#61D39A4BA826DB9D*16CB0*34D01658A*4D#8413D358A16*81478A#26903BA565BABCA#5#3C03BAD3A#0B87*C94*39484C5*5C168DA1392365824D4*7*485B172*C59C#1AD9",
+    "CBAD*#84B05D0729C58C5*4*2832C4D0729B384A1347A1A8C2A9B75A0#*5*2C46B0*#386B9C265C8A*246A*0358014#9C63A027C*8B36D69024A*#84D*4120512*42350D65*142757B0B*5C6D16197*#236937D*89D4B*97D9#37*1#4271A#A173#12CD7#62D4*3#1*B7*6D7BA53C13B#5*137027DCA35CA",
+    "CBAD*#84B05D074D09C092826C760814B6D#7C8*578B*5*C06*D#B9*43292608A#4237CA#D06A90C*268A*2479C4583D0A7*46B02C#7A1AD468*23C81285649562867941A92586B9B#4#290A15A5DB2367AD7B12CD26*57D35C6D0AB5907#9C7D0208C3B57CBD6#79D43749C2897086706A342ACDBDB4AD3",
+    "CBAD*#84B05D07614D04D6C6A0BA4C58#A13B0C29BC#29204A213#D2876D6A4C*3867B0*314A*D4026AC*268BD089C714*B28A#4603B*5*18AC2670C56C9A8D9A6CABD85*D69CA#D#3836D4*59*91#67AB*1B#56015#601#8A8BCD7174519B#928#17*4798#5A61A#7346#108D3C35*9*864A3579#27083#",
+    "CBAD*#84B05D08A7A36A3C2C0610A2B*507926D91C#58#82C15*129349208*3*6*8#6#48BD58D05373D0626C#1CD57235280183#5BC6DCA48#DB#038*D2056#2387AC06#1A635#57AC380A369AC148B25DC787DCD#237#B073#0469348D71528*47D32DA#C*827C7A40239A#5107CB7365436378093BC5B9"
+   ]
+  },
+  {
+   "name": "BIP-39 test seed, account with BIP-44/49/84/86",
+   "type": "crypto-account",
+   "cbor": "a2011a73c5da0a0284d90193d9012fa503582103774c910fcf07fa96886ea794f0d5caed9afe30b44b83f7e213bb92930e7df4bd0458203da4bc190a2680111d31fadfdc905f2a7f6ce77c6f109919116f253d4344521905d90131a20100020006d90130a30186182cf500f500f5021a73c5da0a0303081a155bca59d90190d90194d9012fa503582102f1f347891b20f7568eae3ec9869fbfb67bcab6f358326f10ecc42356bd55939d0458206eaae365ae0e0a0aab84325cfe7cd76c3b909035f889e7d3f1b847a9a0797ecb05d90131a20100020006d90130a301861831f500f500f5021a73c5da0a0303081a3d05ff75d90194d9012fa503582102707a62fdacc26ea9b63b1c197906f56ee0180d0bcf1966e1a2da34f5f3a09a9b0458204a53a0ab21b9dc95869c4e92a161194e03c0ef3ff5014ac692f433c4765490fc05d90131a20100020006d90130a301861854f500f500f5021a73c5da0a0303081a7ef32bdbd90199d9012fa503582103418278a2885c8bb98148158d1474634097a179c642f23cf1cc04da629ac6f0fb045820c61a8f27e98182314d2444da3e600eb5836ec8ad183c86c311f95df8082b18aa05d90131a20100020006d90130a301861856f500f500f5021a73c5da0a0303081a035270da",
+   "descriptors": [
+    "pkh([73c5da0a/44'/0'/0']xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj)#fsskkf06",
+    "sh(wpkh([73c5da0a/49'/0'/0']xpub6C6nQwHaWbSrzs5tZ1q7m5R9cPK9eYpNMFesiXsYrgc1P8bvLLAet9JfHjYXKjToD8cBRswJXXbbFpXgwsswVPAZzKMa1jUp2kVkGVUaJa7))#hdsus5ez",
+    "wpkh([73c5da0a/84'/0'/0']xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V)#xzwgatz2",
+    "tr([73c5da0a/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ)#nzt59xgk"
+   ],
+   "ur": "ur:crypto-account/oeadcyjksktnbkaolrtaadmutaaddlonaxhdclaxktgsmebstkatzsmtlojtosmwwttlsgwenyzedyqzgrlsylvobwrkmomubakiwkryaahdcxfsoxrfcfbkdslabycaehzsuruomhhedrlbjzvdkejlbenlcfbyjldafsfxfygmcfahtaadehoeadaeaoaeamtaaddyotadlncsdwykaeykaeykaocyjksktnbkaxaxaycybzhpsghktaadmhtaadmwtaaddlonaxhdclaownwfflldcwcxylhfmnplfmsolnnersrpkgsgrpwfhdeyjlbewpsscnhfrygomuntaahdcxjtpkvlihplbabkbkpylreyhhzeketsjzfrmhmhecyaldvdtewnroflptnbkkkbsbahtaadehoeadaeaoaeamtaaddyotadlncsehykaeykaeykaocyjksktnbkaxaxaycyfsahzmkptaadmwtaaddlonaxhdclaojoknidzcpssajtptrpfrcecfkkamykjtvtcsbtbdtkcfiyvyoetneeykwfnbnyndaahdcxgegunbpyclrhuomdlnnsglmooyhscfglaxrtwsfhykadgeswmowkeosskoghmhztahtaadehoeadaeaoaeamtaaddyotadlncsghykaeykaeykaocyjksktnbkaxaxaycykbwfdnuytaadnltaaddlonaxhdclaxfplfksoelohhlurhlyfdbzlgbbjyiafzmsoykkswfwwzfnwnsfaatnidnyswwtzoaahdcxswcymydiwllylfehgtdkfytnfmhnbarelsjtsppmcsfnlnsrbyythlyaaydncspkahtaadehoeadaeaoaeamtaaddyotadlncshfykaeykaeykaocyjksktnbkaxaxaycyaxgmjotnkifxvyti",
+   "fits_one_frame": false,
+   "fragment": 100,
+   "urs": [
+    "ur:crypto-account/1-5/lpadahcfadtpcykifxvytihdheoeadcyjksktnbkaolrtaadmutaaddlonaxhdclaxktgsmebstkatzsmtlojtosmwwttlsgwenyzedyqzgrlsylvobwrkmomubakiwkryaahdcxfsoxrfcfbkdslabycaehzsuruomhhedrlbjzvdkejlbenlcfbyjldafsfxfygmcfahtaadehoeadaeaoaadsltvy",
+    "ur:crypto-account/2-5/lpaoahcfadtpcykifxvytihdheaeamtaaddyotadlncsdwykaeykaeykaocyjksktnbkaxaxaycybzhpsghktaadmhtaadmwtaaddlonaxhdclaownwfflldcwcxylhfmnplfmsolnnersrpkgsgrpwfhdeyjlbewpsscnhfrygomuntaahdcxjtpkvlihplbabkbkpylreyhhzeketsjzfrhebalsdm",
+    "ur:crypto-account/3-5/lpaxahcfadtpcykifxvytihdhemhmhecyaldvdtewnroflptnbkkkbsbahtaadehoeadaeaoaeamtaaddyotadlncsehykaeykaeykaocyjksktnbkaxaxaycyfsahzmkptaadmwtaaddlonaxhdclaojoknidzcpssajtptrpfrcecfkkamykjtvtcsbtbdtkcfiyvyoetneeykwfnbnyndhgwynnwn",
+    "ur:crypto-account/4-5/lpaaahcfadtpcykifxvytihdheaahdcxgegunbpyclrhuomdlnnsglmooyhscfglaxrtwsfhykadgeswmowkeosskoghmhztahtaadehoeadaeaoaeamtaaddyotadlncsghykaeykaeykaocyjksktnbkaxaxaycykbwfdnuytaadnltaaddlonaxhdclaxfplfksoelohhlurhlyfdbzlgsgbgbecf",
+    "ur:crypto-account/5-5/lpahahcfadtpcykifxvytihdhebbjyiafzmsoykkswfwwzfnwnsfaatnidnyswwtzoaahdcxswcymydiwllylfehgtdkfytnfmhnbarelsjtsppmcsfnlnsrbyythlyaaydncspkahtaadehoeadaeaoaeamtaaddyotadlncshfykaeykaeykaocyjksktnbkaxaxaycyaxgmjotnaeaeaesbfrmydp",
+    "ur:crypto-account/6-5/lpamahcfadtpcykifxvytihdheoeadcyjksktnbkaolrtaadmutaaddlonaxhdclaxktgsmebstkatzsmtlojtosmwwttlsgwenyzedyqzgrlsylvobwrkmomubakiwkryaahdcxfsoxrfcfbkdslabycaehzsuruomhhedrlbjzvdkejlbenlcfbyjldafsfxfygmcfahtaadehoeadaeaobtcsrlam",
+    "ur:crypto-account/7-5/lpatahcfadtpcykifxvytihdheoeadcyjksktnbkaolrtaadmutaaddlonaxhdclaxktgsmebstkatzsmtlojtosmwwttlsgwenyzedyqzgrlsylvobwrkmomubakiwkryaahdcxfsoxrfcfbkdslabycaehzsuruomhhedrlbjzvdkejlbenlcfbyjldafsfxfygmcfahtaadehoeadaeaogradryfn",
+    "ur:crypto-account/8-5/lpayahcfadtpcykifxvytihdhecprkrelaronebkmournswkfyahechkhsfrykjelsroyamyeespbafpchatattldiisykkszscpdnbwlkbspelaadtanbttqdgatecnhfbnletsmovltpessgswtdetfhkedpfrrpgrvtksrllgnshsfmgwmtrnfwrsptfpsotbfeytpajtpfwfkofmvldlcmpmghcn"
+   ],
+   "frames": [
+    "CBAD*#83A838B2B07A78AC84D*7D*74C35C04*5789*9#*37#197*02D#7878C5295ABDAC5A84D*3*5A*07#9#B0CB#158*0B5*36591C#B*#68C5A3A564ACD35156029AB7B193B5D49*6A17#D591621B168D6C78*A47*5C#A3AD45#939387#9072B486050C9#2BD0A93513D14#5653473623A4123*1975D07*14B359B692#4078B5*54A4D6B#19D070#737D0#BA2C*2A98C5#B5*C0*5A7D#672B2545C6A",
+    "CBAD*#83A838B2D4B*BC*0C812B12B807904823*#1047*723#867534C23923D0979605B78085#2803BDAC9047*C*260171A815C80AB03A4C20401C8791*260*89D3715BA296A2B94DB409717179578AC1*6C1C39D56#8A6#21601A168C915C8B2A08*D202D#023#15D615C7#486D#9*2384*2A814A2C5A49D72683D1234#5416B8*8B#B8D2D7#1316A82B8*07AC37367C*5*4D5#79C5*5*06AB37879",
+    "CBAD*#83A838B2#8#2#0240C56#56#C4BD48C6C47349*A6C#4#58*C4C2A29*96048083B2BA3697#03A2678ACD*0D1DB3728ABCABC315A6A79C39A3*9A4D6*B8B2#6124#A01306D5C49C9D6A12ADC0CA260478A812C2#530475C705D#0C*#6B95A26343B165104C#ABD82A848D61D319C#9303464*6846DC9D71D*190917#196278#48374A05C6*2#014D#*0457129C*7873090CB4A56B82C39A13C*9",
+    "CBAD*#83A838B21C363468409A39A308#18C0AB8A57894D6B23C3#419619D10C#268*7*294B48B3C1A#*8C9B28102C413A3BDC3#260*0605A8C4A107D37347C#038BC0*5A8B13C#BDA68*#C5C2B812C#86879AB6#9B276A482#6B95B5B85C634B7CD3085A8B09618D*C01B#45CAB4DB*#91C27#4C1A89D*D467D15D57A06#BD9125241A718#9D41A024#3B*5D*CD3C24D0234A96C*A71A#*25B4B45C",
+    "CBAD*#83A838B3529C9AC*A6#09#096*57*26028B#1A207A4861754D*C35#3*284C2B04D0#06*139D75275402#B69*6B45605454B0C34*A8B63*#085C42C46DB#6B58D4C0B38D97915#D217B3B#BCA#9AC28#25C1*B052#4D2CAB63BCA59A867*7689A36B9B14B6032C6A376AB4CD42ACB43797#478BCD*#0121359396B2B39B29B6A#109604*1*2A1206BD3756#48293B945B73C3A0310D152C0#A2",
+    "CBAD*#83A838B376D0D*02*A34D34DA29B26A4BD*#4#549D57#D46835D*D*2B8#B01302B0*A3494B046D5#5162157B*461B49CB#725145C*2B090BCA0239B7BC68#01D17#91B3A#4C07D53B#7C8717C*3C2D*40AD4B250903AB5#9#9*D5#6D81A*C6B62#581360#9B7937A5BCB9AD9C890A78947#DB36D47A184*9*6#6ABC40*78267374951D2A37A9837A4*165D541*6#0B#A6367#6828C#43B28A5",
+    "CBAD*#83A838B3AC363468409A39A308#18C0A1345A5BA#3BD53AC*9B343481*516796816409A#A16AC3B5B7C87BD14AC71A#215D8B7AB24816#6120689#1D12C*56737D5#71905A26D3B915D2*D7D2492834A603A18B6#6901B5#5#43B5C3*7042C1C85B*79C65#1D#9D0B121#03#2*#60D*#AD5319C3AD07*60A0AB2036D389C4D382AD7C9#2CD0390A2BA*31*087A21D9#06CD2629010AC8C06#6",
+    "CBAD*#83A838B3C07A78AC84D*7D*74C35C04*0D1A0*2C73405#6D1B5*C*64345B97B1*9#*C*294C195D364*5A3*14B462678D417129C1#AC#B8A#BC20#69#A12346#30265#A21CA*BDB#AB9D28B*BA6D8*91C28CB767129#12A24*04*#B4*#*019*2D2#193C3DB*28928264762BCA32626072CB35C80131A2A2BD#4D96D48B2A28B43C697D6DB1A3BD18BA#6847D962B6535B18A52027916D2C037C"
+   ]
+  },
+  {
+   "name": "bytes",
+   "type": "bytes",
+   "cbor": "583e75722d746f6e65733a20616e792062797465732c207375636820617320612077616c6c65742066696c65206f722061206d756c7469736967207365747570",
+   "text": "ur-tones: any bytes, such as a wallet file or a multisig setup",
+   "ur": "ur:bytes/hdfmkpjpdpjyjljtihjkftcxhsjtkkcxidkkjyihjkdwcxjkkpiaiscxhsjkcxhscxkthsjzjzihjycxiyinjzihcxjljpcxhscxjnkpjzjyinjkiniocxjkihjykpjowyfwiadt",
+   "fits_one_frame": true,
+   "fragment": 100,
+   "urs": [
+    "ur:bytes/hdfmkpjpdpjyjljtihjkftcxhsjtkkcxidkkjyihjkdwcxjkkpiaiscxhsjkcxhscxkthsjzjzihjycxiyinjzihcxjljpcxhscxjnkpjzjyinjkiniocxjkihjykpjowyfwiadt"
+   ],
+   "frames": [
+    "CBAD*#05C*0D*7590AD#8B34948#5049*589D8#69*52323573B#38248363B8A1924D#3A#7819A859A3B12#*484B#75#3B7#C13DC2AB5*4B9A1#9A*C2919198CB405042D*1417B32B2CD*657C5*16*36351DA16#8C*#7915A*07568635*4C3C29045018767*46A382694A3#62"
+   ]
+  },
+  {
    "name": "named UR type",
    "urs": [
     "ur:x-ur-tones-test/fdkpjpdpjyjljtihjkhpwyahrk"

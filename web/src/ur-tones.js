@@ -386,6 +386,16 @@ const UrTones = (() => {
 		for (let i = 0; i < enc.seqLen + extra; i++) urs.push(urText(type, KIND_PART, enc.nextPart()));
 		return { urs, encoder: enc, type };
 	}
+	// a message (CBOR) as frames to play, forever: one frame in a loop, or
+	// the parts of a fountain-coded loop (SPEC §2.4)
+	function* messageFrames(type, cbor, fragment = 100) {
+		const enc = new FountainEncoder(cbor, fragment);
+		if (enc.seqLen === 1) { const f = urToFrame(urText(type, KIND_SINGLE, cbor)); for (;;) yield f; }
+		for (;;) yield urToFrame(urText(type, KIND_PART, enc.nextPart()));
+	}
+	function fitsOneFrame(ur) {
+		try { urToFrame(ur); return true; } catch (e) { return false; }
+	}
 	const psbtToURs = (psbt, fragment, extra) => messageToURs("crypto-psbt", cborBytes(psbt), fragment, extra);
 	function cborToPsbt(cbor) { // crypto-psbt and psbt: a byte string
 		const [psbt, end] = cborReadBytes(cbor, 0);
@@ -629,7 +639,7 @@ const UrTones = (() => {
 	return {
 		FORMAT_VERSION, KEYS, LEAD, SYNC, PARITY, toTones, fromTones, segment, UR_TYPES, FREQS, DecodeError,
 		crc32, bytewordsMinimal, fromBytewordsMinimal, cborBytes, parseUR, urText, urToFrame, frameToUR,
-		FountainEncoder, FountainDecoder, parsePart, messageToURs, psbtToURs, cborToPsbt,
+		FountainEncoder, FountainDecoder, parsePart, messageToURs, messageFrames, fitsOneFrame, psbtToURs, cborToPsbt,
 		seedToKeypad, keypadToSeed, seedToUR, urToSeed, render, wav, readWav, Listener, listen,
 	};
 })();

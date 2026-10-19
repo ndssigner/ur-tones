@@ -97,6 +97,8 @@
 	const PSBT_MAGIC = [0x70, 0x73, 0x62, 0x74, 0xff];
 	// the BIP-39 test vector everyone knows: never holds funds
 	const TEST_SEED = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+	// a message (CBOR) to send in parts of 100 bytes when it needs more than one
+	const message = (type, cbor) => ({ type, cbor, parts: new TN.FountainEncoder(cbor, 100).seqLen });
 	function parseInput(text) {
 		const s = text.trim();
 		if (!s) return null;
@@ -105,12 +107,15 @@
 				const urs = s.split(/\s+/).filter(Boolean);
 				const parsed = urs.map((u) => TN.parseUR(u));
 				if (parsed.some((p) => p.type !== parsed[0].type)) return { kind: "bad" };
+				// one UR too long for one frame: sent as a multi-part UR (SPEC §2.4)
+				if (urs.length === 1 && parsed[0].kind === 0 && !TN.fitsOneFrame(urs[0]))
+					return { kind: "long", ...message(parsed[0].type, parsed[0].body) };
 				return { kind: "urs", urs, type: parsed[0].type };
 			}
 			let psbt = null;
 			if (/^cHNidP8/.test(s)) psbt = fromBase64(s);
 			else if (/^70736274ff[0-9a-f\s]*$/i.test(s)) psbt = fromHex(s);
-			if (psbt) return { kind: "psbt", psbt, parts: new TN.FountainEncoder(TN.cborBytes(psbt), 100).seqLen };
+			if (psbt) return { kind: "psbt", psbt, ...message("crypto-psbt", TN.cborBytes(psbt)) };
 			const words = s.toLowerCase().split(/\s+/);
 			if (words.length === 12 || words.length === 24) return { kind: "seed", entropy: S.mnemonicToEntropy(words.join(" ")), words: words.length };
 		} catch (e) { /* not that */ }
@@ -127,11 +132,9 @@
 			const fs = input.urs.map(TN.urToFrame);
 			for (;;) yield* fs;
 		}
-		const enc = new TN.FountainEncoder(TN.cborBytes(input.psbt), 100);
-		if (enc.seqLen === 1) { const f = TN.urToFrame(TN.urText("crypto-psbt", 0, TN.cborBytes(input.psbt))); for (;;) yield f; }
-		for (;;) yield TN.urToFrame(TN.urText("crypto-psbt", 1, enc.nextPart()));
+		yield* TN.messageFrames(input.type, input.cbor);
 	}
-	const roundLength = (input) => input.kind === "psbt" ? input.parts : input.kind === "urs" ? input.urs.length : 1;
+	const roundLength = (input) => input.cbor ? input.parts : input.kind === "urs" ? input.urs.length : 1;
 
 	// ---- player ------------------------------------------------------
 	const player = { ctx: null, source: null, timer: null, on: false };
@@ -215,6 +218,7 @@
 			info.className = "detected " + (!input ? "" : input.kind !== "bad" ? "ok" : "bad");
 			info.textContent = !input ? "" : input.kind === "psbt" ? t.detected.psbt(input.psbt.length, input.parts)
 				: input.kind === "urs" ? t.detected.urs(input.urs.length, input.type)
+				: input.kind === "long" ? t.detected.long(input.parts, input.type)
 				: input.kind === "seed" ? t.detected.seed(input.words) : t.detected.bad;
 			options.replaceChildren(); live.replaceChildren();
 			if (!input || input.kind === "bad") {
@@ -245,7 +249,7 @@
 					h("button", { class: "btn ghost big", on: { click: () => { stopPlaying(); view.status.textContent = t.ready; view.bar.style.width = "0"; } } }, t.stop),
 					h("span", { class: "meta", text: t.duration(secs) }),
 					h("button", { class: "btn ghost small push", title: t.wavRound, on: { click: () => {
-						const extra = input.kind === "psbt" && input.parts > 1 ? Math.ceil(input.parts / 2) + 1 : 0;
+						const extra = input.cbor && input.parts > 1 ? Math.ceil(input.parts / 2) + 1 : 0;
 						const g = frames(input, s), list = Array.from({ length: round.length + extra }, () => g.next().value);
 						download(TN.wav(TN.render(list, 44100, pace.tone, pace.gap, 2 * pace.pause), 44100), "ur-tones.wav", "audio/wav");
 					} } }, t.saveWav)),
@@ -323,7 +327,9 @@
 			result.scrollIntoView({ behavior: "smooth", block: "nearest" });
 		}
 		const done = (title, ...body) => h("div", { class: "result" }, h("div", { class: "result-title", text: "✓ " + title }), ...body);
+		// ur: the UR text, or null for a multi-part message, rebuilt here as one UR (SPEC §2.4)
 		function gotMessage(type, cbor, ur) {
+			ur = ur || TN.urText(type, 0, cbor);
 			if (type === "crypto-psbt" || type === "psbt") {
 				const psbt = TN.cborToPsbt(cbor), b64 = toBase64(psbt);
 				const out = h("textarea", { class: "input mono", rows: 4, readonly: "" }); out.value = b64;
@@ -331,7 +337,7 @@
 					h("div", { class: "row" }, copyButton(() => b64),
 						h("button", { class: "btn ghost", on: { click: () => download(psbt, "transaction.psbt", "application/octet-stream") } }, t.savePsbt)),
 					h("div", { class: "hint", text: t.toSparrow })));
-			} else if ((type === "crypto-seed" || type === "seed") && ur) {
+			} else if (type === "crypto-seed" || type === "seed") {
 				gotSeed(TN.urToSeed(ur, L.pin || null));
 			} else {
 				const out = h("textarea", { class: "input mono", rows: 3, readonly: "" }); out.value = ur;

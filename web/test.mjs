@@ -91,6 +91,29 @@ for (const v of vectors) {
 	}
 }
 
+// xpubs, descriptors and bytes: the parts are ur2's, the frames to play are
+// those, and the parts come back as the whole UR (what the web tool shows)
+for (const v of vectors.filter((v) => v.cbor)) {
+	const cbor = bytes(v.cbor), seqLen = new U.FountainEncoder(cbor, v.fragment).seqLen;
+	check(U.urText(v.type, 0, cbor) === v.ur, "whole UR " + v.name);
+	check(U.fitsOneFrame(v.ur) === v.fits_one_frame, "fits one frame " + v.name);
+	check(JSON.stringify(U.messageToURs(v.type, cbor, v.fragment, v.urs.length - seqLen).urs) === JSON.stringify(v.urs), "fountain encoder = ur2 " + v.name);
+	const gen = U.messageFrames(v.type, cbor, v.fragment);
+	check(v.frames.every((f) => gen.next().value === f), "frames to play " + v.name);
+	if (seqLen > 1) {
+		const dec = new U.FountainDecoder();
+		for (const f of v.frames) dec.receive(U.frameToUR(f).body);
+		check(dec.result && U.urText(v.type, 0, dec.result) === v.ur, "parts back as the whole UR " + v.name);
+	}
+}
+// a seed in parts (other senders may split one): back as the whole UR, then the seed
+{
+	const s = vectors.find((v) => v.entropy && v.pin), dec = new U.FountainDecoder();
+	const enc = new U.FountainEncoder(U.parseUR(s.ur).body, 8, 4);
+	for (let i = 0; i < enc.seqLen + 2; i++) dec.receive(U.frameToUR(U.urToFrame(U.urText("crypto-seed", 1, enc.nextPart()))).body);
+	check(dec.result && hex(U.urToSeed(U.urText("crypto-seed", 0, dec.result), s.pin)) === s.entropy, "seed in parts");
+}
+
 // a simulated acoustic channel: a small speaker, a room, noise, fading
 function channel(x, rate, { speakerFc = 900, rt60 = 0.4, wet = 0.6, noise = 0.01, fade = 0.3 } = {}) {
 	const hp = (inp) => { const a = 1 / (1 + 2 * Math.PI * speakerFc / rate); let px = 0, py = 0; return inp.map((v) => { py = a * (py + v - px); px = v; return py; }); };

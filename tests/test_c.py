@@ -182,6 +182,10 @@ def main():
             extra = next(k for k in st.KEYS if k not in (frame[i - 1], frame[i]))
             check(from_frame(frame[:i] + extra + frame[i:])[0] == ur, "extra tone " + name)
             check(from_frame(frame[2:])[0] == ur and from_frame(frame[3:])[0] == ur, "lead-in lost " + name)
+        if "fits_one_frame" in v:
+            # the whole message as one UR: one frame if it fits; if not, refused (it goes in parts)
+            got = to_frame(v["ur"])
+            check(from_frame(got) == (v["ur"], 0) if v["fits_one_frame"] else got == -5, "whole UR, one frame or refused " + name)
     check(lib.ut_seed_to_keypad(buf(bytes(16)), 16, b"no-pin!", ctypes.create_string_buffer(200), 200) == -8, "bad PIN refused")
 
     # audio
