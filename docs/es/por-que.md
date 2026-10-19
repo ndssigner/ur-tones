@@ -40,8 +40,8 @@ semillas.
 > firma (por ejemplo libsecp256k1), como han hecho otras carteras para
 > microcontroladores. Y las carteras aún no hablan en tonos: en el
 > ordenador, la [herramienta web](https://ndssigner.github.io/ur-tones/)
-> hace de puente (copias la PSBT de Sparrow y la reproduces; escuchas la
-> firmada y la copias de vuelta).
+> hace de puente (copias de Sparrow la PSBT, o la xpub o el descriptor de la
+> cartera, y lo reproduces; escuchas la firmada y la copias de vuelta).
 
 ### SeedSigner frente a un firmador con ur-tones
 

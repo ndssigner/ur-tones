@@ -38,8 +38,8 @@ cassette as tones. Here, the "programs" are PSBTs, xpubs and seeds.
 > libsecp256k1) would have to be written or ported to it, as other
 > microcontroller wallets have done. And wallets do not speak tones yet: on
 > the computer, the [web tool](https://ndssigner.github.io/ur-tones/) is the
-> bridge (copy the PSBT from Sparrow, play it; listen to the signed one,
-> copy it back).
+> bridge (copy the PSBT, or the wallet's xpub or descriptor, from Sparrow and
+> play it; listen to the signed one, copy it back).
 
 ### SeedSigner vs a ur-tones signer
 

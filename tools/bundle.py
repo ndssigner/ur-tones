@@ -28,9 +28,13 @@ https://github.com/ndssigner/ur-tones
 Draft: do not move the seed of real funds with a draft format.
 
 ur-tones.html    Web tool. Open it in a browser, offline. Paste a PSBT (from
-                 Sparrow, say) and play it as telephone tones; listen to tones
-                 (microphone or WAV file) and get the PSBT, a UR or a test seed
-                 back. It cannot connect anywhere.
+                 Sparrow, say), an xpub or zpub, descriptors, URs or a test
+                 seed, or make a new seed (browser, dice or both), and play
+                 them as telephone tones or save a WAV; listen to tones
+                 (microphone or WAV file) and get them back. Public keys go as
+                 today's UR types (hdkey, output-descriptor,
+                 account-descriptor) or the older crypto-* ones. It cannot
+                 connect anywhere.
 SPEC.md          The specification, cables included.
 c/               The C library for small devices (no malloc, no floating point).
 SHA256SUMS       Check the files: sha256sum -c SHA256SUMS
@@ -38,9 +42,14 @@ SHA256SUMS       Check the files: sha256sum -c SHA256SUMS
 Borrador: no muevas con un formato en borrador la semilla de fondos reales.
 
 ur-tones.html    Herramienta web. Ábrela en un navegador, sin conexión. Pega una
-                 PSBT (de Sparrow, por ejemplo) y reprodúcela en tonos de
-                 teléfono; escucha tonos (micrófono o archivo WAV) y recupera la
-                 PSBT, un UR o una semilla de prueba. No puede conectarse.
+                 PSBT (de Sparrow, por ejemplo), una xpub o zpub, descriptores,
+                 URs o una semilla de prueba, o crea una semilla nueva
+                 (navegador, dados o ambos), y reprodúcelos en tonos de
+                 teléfono o guárdalos en WAV; escucha tonos (micrófono o
+                 archivo WAV) y recupéralos. Las claves públicas van en los
+                 tipos UR actuales (hdkey, output-descriptor,
+                 account-descriptor) o en los antiguos crypto-*. No puede
+                 conectarse.
 SPEC.md          La especificación, cables incluidos.
 c/               La librería en C para aparatos pequeños (sin malloc ni coma flotante).
 SHA256SUMS       Comprueba los ficheros: sha256sum -c SHA256SUMS

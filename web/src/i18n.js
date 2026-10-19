@@ -10,7 +10,7 @@ const UR_TONES_TEXT = {
 		expectTitle: "What to expect",
 		expect: [
 			"A testing tool for a draft format (v0): it may still change.",
-			"It talks to NDS-Signer on a Nintendo DSi, and to another browser with this page. With Sparrow, by copying and pasting the PSBT.",
+			"It talks to NDS-Signer on a Nintendo DSi, and to another browser with this page. With Sparrow, by copying and pasting the PSBT, the xpub or the descriptor.",
 			"By cable about 16 tones a second: a 450-byte PSBT in under 2 minutes. Through the air it is slower, and noise matters.",
 			"It signs nothing and keeps nothing: closing the page forgets everything.",
 		],
@@ -147,7 +147,7 @@ const UR_TONES_TEXT = {
 		expectTitle: "Qué esperar",
 		expect: [
 			"Una herramienta de pruebas de un formato en borrador (v0): aún puede cambiar.",
-			"Se entiende con NDS-Signer en una Nintendo DSi, y con otro navegador con esta página. Con Sparrow, copiando y pegando la PSBT.",
+			"Se entiende con NDS-Signer en una Nintendo DSi, y con otro navegador con esta página. Con Sparrow, copiando y pegando la PSBT, la xpub o el descriptor.",
 			"Por cable, unos 16 tonos por segundo: una PSBT de 450 bytes en menos de 2 minutos. Al aire va más lento y el ruido cuenta.",
 			"No firma nada ni guarda nada: al cerrar la página lo olvida todo.",
 		],

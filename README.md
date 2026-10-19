@@ -113,7 +113,8 @@ air-gapped device.
   simulated acoustic channel (`tests/acoustic.py`: a small speaker, a room's
   echo, noise), at several paces and sample rates, and keyed at a person's
   pace.
-- `web/`: the web tool (`web/test.mjs` checks it against the same vectors,
+- `web/`: the web tool — `src/keys.js` is the public keys' part: xpubs,
+  descriptors, hdkey and the rest (`web/test.mjs` checks it against the same vectors,
   Node's crypto and the simulated channel).
 
 ```bash
@@ -121,7 +122,7 @@ python3 tests/test_reference.py      # the Python reference
 python3 tests/test_c.py              # the C library (needs cc)
 node web/test.mjs                    # the JavaScript (Node.js ≥ 18)
 node web/build.mjs                   # dist/ur-tones.html + its SHA-256
-python3 tools/bundle.py v0.2.0       # the release zip, reproducible
+python3 tools/bundle.py v0.3.0       # the release zip, reproducible
 python3 tools/readme_hero.py         # this README's picture (needs Chrome)
 ```
 
