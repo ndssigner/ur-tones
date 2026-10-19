@@ -16,7 +16,7 @@ const cspHash = (text) => "sha256-" + createHash("sha256").update(text, "utf8").
 const png = (f) => "data:image/png;base64," + readFileSync(new URL("../docs/images/" + f, here)).toString("base64");
 const donate = `// ---- donation images ----\nconst DONATE_IMAGES = { bitcoin: "${png("donate-bitcoin.png")}", lightning: "${png("donate-lightning.png")}" };\n`;
 
-const script = donate + ["src/bip39-english.js", "src/crypto.js", "src/ur-tones.js", "src/i18n.js", "src/app.js"]
+const script = donate + ["src/bip39-english.js", "src/crypto.js", "src/ur-tones.js", "src/keys.js", "src/i18n.js", "src/app.js"]
 	.map((f) => `// ---- ${f} ----\n${read(f)}`).join("\n");
 const style = read("src/style.css");
 const formatVersion = /const FORMAT_VERSION = (\d+);/.exec(read("src/ur-tones.js"))[1];

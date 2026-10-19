@@ -4,13 +4,13 @@
 "use strict";
 
 (() => {
-	const S = UrTonesCrypto, TN = UrTones;
+	const S = UrTonesCrypto, TN = UrTones, K = UrTonesKeys;
 	const $ = (id) => document.getElementById(id);
 	const st = {
 		lang: (navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en",
 		screen: "intro",
 		// generated: a new seed's entropy (never put in the text box, where it would show)
-		send: { text: "", mode: "data", pin: "", made: "", pace: "cable", generated: null, gen: { open: false, words: 12, source: "browser", rolls: "" } },
+		send: { text: "", mode: "data", pin: "", made: "", pace: "cable", keyFormat: "current", psbtFormat: "crypto-psbt", generated: null, gen: { open: false, words: 12, source: "browser", rolls: "" } },
 	};
 	const T = () => UR_TONES_TEXT[st.lang];
 	// SPEC §1.1. Keypad mode's digits repeat: never faster than 80 + 80 ms
@@ -80,6 +80,11 @@
 		document.body.append(a); a.click(); a.remove();
 		setTimeout(() => URL.revokeObjectURL(url), 10000);
 	}
+	function readonlyText(text) {
+		const out = h("textarea", { class: "input mono", rows: Math.min(8, text.split("\n").length + 1), readonly: "", spellcheck: "false" });
+		out.value = text;
+		return out;
+	}
 	function copyButton(getText) {
 		const t = T();
 		const b = h("button", { class: "btn ghost", on: { click: async () => {
@@ -117,9 +122,17 @@
 	const TEST_SEED = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 	// a message (CBOR) to send in parts of 100 bytes when it needs more than one
 	const message = (type, cbor) => ({ type, cbor, parts: new TN.FountainEncoder(cbor, 100).seqLen });
-	function parseInput(text) {
+	// keyFormat: "current" (hdkey, output-descriptor, account-descriptor) or "legacy" (crypto-…)
+	function parseInput(text, keyFormat, psbtFormat = "crypto-psbt") {
 		const s = text.trim();
 		if (!s) return null;
+		// an xpub (ypub, zpub…), a descriptor, or an account's descriptors (one per line)
+		if (K.looksLikeKeys(s)) {
+			try {
+				const keys = K.fromText(s), u = keys.toUR(keyFormat !== "legacy");
+				return { kind: "keys", keys, ...message(u.type, u.cbor) };
+			} catch (e) { return { kind: "bad", why: e.message }; }
+		}
 		try {
 			if (/^ur:/i.test(s)) {
 				const urs = s.split(/\s+/).filter(Boolean);
@@ -133,7 +146,7 @@
 			let psbt = null;
 			if (/^cHNidP8/.test(s)) psbt = fromBase64(s);
 			else if (/^70736274ff[0-9a-f\s]*$/i.test(s)) psbt = fromHex(s);
-			if (psbt) return { kind: "psbt", psbt, ...message("crypto-psbt", TN.cborBytes(psbt)) };
+			if (psbt) return { kind: "psbt", psbt, ...message(psbtFormat, TN.cborBytes(psbt)) };
 			const words = s.toLowerCase().split(/\s+/);
 			if (words.length === 12 || words.length === 24) return { kind: "seed", entropy: S.mnemonicToEntropy(words.join(" ")), words: words.length };
 		} catch (e) { /* not that */ }
@@ -221,7 +234,7 @@
 		const view = { status: h("div", { class: "status", text: "" }), keys: h("div", { class: "keys" }), bar: h("div", {}) };
 		const info = h("div", { class: "detected" });
 		const options = h("div", { class: "stack" }), live = h("div", { class: "stack" });
-		const PLACEHOLDER = "cHNidP8BA… · ur:crypto-psbt/… · abandon ability …";
+		const PLACEHOLDER = "cHNidP8BA… · zpub6r… · wpkh([…]xpub…) · ur:psbt/… · abandon ability …";
 		const area = h("textarea", { class: "input", rows: 4, spellcheck: "false", autocomplete: "off", placeholder: PLACEHOLDER });
 		area.value = s.text;
 		const genBtn = h("button", { class: "btn ghost small" });
@@ -258,7 +271,7 @@
 		} } });
 		function update() {
 			stopPlaying();
-			const input = s.generated ? { kind: "seed", entropy: s.generated, words: s.generated.length * 3 / 4, generated: true } : parseInput(s.text);
+			const input = s.generated ? { kind: "seed", entropy: s.generated, words: s.generated.length * 3 / 4, generated: true } : parseInput(s.text, s.keyFormat, s.psbtFormat);
 			area.disabled = !!s.generated;
 			area.placeholder = s.generated ? t.genHidden : PLACEHOLDER;
 			genBtn.textContent = s.generated ? t.genDiscard : "🎲 " + t.newSeed;
@@ -268,8 +281,9 @@
 			info.textContent = !input ? "" : input.kind === "psbt" ? t.detected.psbt(input.psbt.length, input.parts)
 				: input.kind === "urs" ? t.detected.urs(input.urs.length, input.type)
 				: input.kind === "long" ? t.detected.long(input.parts, input.type)
+				: input.kind === "keys" ? t.detected.keys(input.keys.what, input.type, input.parts)
 				: input.generated ? t.detected.newSeed(input.words)
-				: input.kind === "seed" ? t.detected.seed(input.words) : t.detected.bad;
+				: input.kind === "seed" ? t.detected.seed(input.words) : t.detected.bad + (input.why ? ` (${input.why})` : "");
 			options.replaceChildren(); live.replaceChildren();
 			if (!input || input.kind === "bad") {
 				if (!input && s.gen.open) options.append(generator());
@@ -283,6 +297,12 @@
 					field(t.seedMode, seg([["data", t.modeData, t.modeDataHelp], ["keypad", t.modeKeypad, t.modeKeypadHelp]], s.mode, again((v) => { s.mode = v; }))),
 					field(t.pin, pinField(s, () => update()), h("div", { class: "hint", text: t.pinHint })));
 			}
+			if (input.kind === "psbt")
+				options.append(field(t.keyFormat, seg([["crypto-psbt", "crypto-psbt", t.psbtLegacyHelp], ["psbt", "psbt", t.psbtCurrentHelp]],
+					s.psbtFormat, again((v) => { s.psbtFormat = v; }))));
+			if (input.kind === "keys")
+				options.append(field(t.keyFormat, seg([["current", t.fmtCurrent, t.fmtCurrentHelp], ["legacy", t.fmtLegacy, t.fmtLegacyHelp]],
+					s.keyFormat, again((v) => { s.keyFormat = v; }))));
 			if (!(input.kind === "seed" && s.mode === "keypad"))
 				options.append(field(t.pace, seg([["cable", t.paceCable, t.paceCableHelp], ["air", t.paceAir, t.paceAirHelp]], s.pace, again((v) => { s.pace = v; }))));
 			if (input.kind === "seed" && s.pace === "air" && s.mode !== "keypad")
@@ -306,6 +326,7 @@
 					} } }, t.saveWav)),
 				input.kind === "seed" ? fingerprintBox(input.entropy, t.fingerprintSend) : null,
 				input.generated ? revealWords(input.entropy) : null,
+				input.kind === "keys" && input.keys.descriptors.length ? field(t.descriptors, readonlyText(input.keys.descriptors.join("\n"))) : null,
 				view.status, h("div", { class: "bar-track" }, view.bar), view.keys);
 			if (input.kind === "seed" && s.mode === "keypad") {
 				const digits = round[0].slice(1, -1).match(/.{4}/g);
@@ -378,6 +399,20 @@
 			result.replaceChildren(node);
 			result.scrollIntoView({ behavior: "smooth", block: "nearest" });
 		}
+		// public keys: the descriptors and the xpubs (with SLIP-132's ypub, zpub… where the script says which)
+		function gotKeys(type, cbor, ur) {
+			let k;
+			try { k = K.describe(type, cbor); } catch (e) {
+				return finish(done(t.gotUR, readonlyText(ur), h("div", { class: "row" }, copyButton(() => ur)), h("div", { class: "hint warn", text: e.message })));
+			}
+			const xpubs = k.keys.map((x) => x.origin + x.xpub + (x.slip132 ? "\n" + x.slip132 : "")).join("\n\n");
+			finish(done(t.gotKeys,
+				k.names.length ? h("div", { class: "hint", text: k.names.join(", ") }) : null,
+				k.descriptors.length ? field(t.descriptors, readonlyText(k.descriptors.join("\n")), h("div", { class: "row" }, copyButton(() => k.descriptors.join("\n")))) : null,
+				field(t.xpubs, readonlyText(xpubs), h("div", { class: "row" }, copyButton(() => k.keys.map((x) => x.slip132 || x.xpub).join("\n")))),
+				h("div", { class: "hint", text: t.keysHint }),
+				h("details", { class: "more" }, h("summary", { text: t.urText(type) }), readonlyText(ur), h("div", { class: "row" }, copyButton(() => ur)))));
+		}
 		const done = (title, ...body) => h("div", { class: "result" }, h("div", { class: "result-title", text: "✓ " + title }), ...body);
 		// ur: the UR text, or null for a multi-part message, rebuilt here as one UR (SPEC §2.4)
 		function gotMessage(type, cbor, ur) {
@@ -389,6 +424,8 @@
 					h("div", { class: "row" }, copyButton(() => b64),
 						h("button", { class: "btn ghost", on: { click: () => download(psbt, "transaction.psbt", "application/octet-stream") } }, t.savePsbt)),
 					h("div", { class: "hint", text: t.toSparrow })));
+			} else if (K.KEY_TYPES.includes(type)) {
+				gotKeys(type, cbor, ur);
 			} else if (type === "crypto-seed" || type === "seed") {
 				gotSeed(TN.urToSeed(ur, L.pin || null));
 			} else {

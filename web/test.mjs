@@ -8,11 +8,11 @@ import vm from "node:vm";
 
 const here = new URL(".", import.meta.url);
 const read = (p) => readFileSync(new URL(p, here), "utf8");
-const ctx = vm.createContext({});
-for (const f of ["src/bip39-english.js", "src/crypto.js", "src/ur-tones.js"])
+const ctx = vm.createContext({ TextEncoder, TextDecoder });
+for (const f of ["src/bip39-english.js", "src/crypto.js", "src/ur-tones.js", "src/keys.js"])
 	vm.runInContext(read(f), ctx, { filename: f });
-vm.runInContext("globalThis.C = UrTonesCrypto; globalThis.U = UrTones;", ctx);
-const C = ctx.C, U = ctx.U;
+vm.runInContext("globalThis.C = UrTonesCrypto; globalThis.U = UrTones; globalThis.K = UrTonesKeys;", ctx);
+const C = ctx.C, U = ctx.U, K = ctx.K;
 
 let failures = 0, checks = 0;
 const check = (ok, what) => { checks++; if (!ok) { failures++; console.log("FAIL", what); } };
@@ -121,6 +121,55 @@ for (const v of vectors.filter((v) => v.cbor)) {
 		check(dec.result && U.urText(v.type, 0, dec.result) === v.ur, "parts back as the whole UR " + v.name);
 	}
 }
+// public keys: the current UR types against Blockchain Commons' own vectors
+const throws = (f) => { try { f(); return false; } catch (e) { return true; } };
+const noSum = (d) => d.replace(/#[a-z0-9]{8}$/, "");
+{
+	const bcr = JSON.parse(read("../vectors/bcr-keys.json"));
+	const a = bcr.account_descriptor, o = bcr.output_descriptor;
+	const got = K.describe("account-descriptor", bytes(a.cbor));
+	check(JSON.stringify(got.descriptors.map(noSum)) === JSON.stringify(a.descriptors), "account-descriptor (BCR-2023-019) read");
+	const made = K.fromText(a.descriptors.join("\n")).toUR(true);
+	check(made.type === "account-descriptor" && hex(made.cbor) === a.cbor, "account-descriptor (BCR-2023-019) written byte for byte");
+	const od = K.describe("output-descriptor", bytes(o.cbor));
+	check(noSum(od.descriptors[0]) === o.descriptor && od.names[0] === o.name, "output-descriptor (BCR-2023-010, multisig <0;1>/*) read");
+	const m = K.decode(bytes(o.cbor));
+	delete m[3];
+	check(hex(K.fromText(o.descriptor).toUR(true).cbor) === hex(K.encode(m)), "output-descriptor (BCR-2023-010) written byte for byte");
+	check(throws(() => K.fromText(o.descriptor).toUR(false)), "<0;1> refused in crypto-output");
+	for (const d of [...a.descriptors, o.descriptor]) check(K.describe(...(() => { const u = K.fromText(d).toUR(true); return [u.type, u.cbor]; })()).descriptors.map(noSum)[0] === d, "round trip " + d.slice(0, 20));
+}
+// the older types against urtypes (vectors), both ways; checksums as Bitcoin Core
+for (const v of vectors.filter((v) => v.cbor && v.type !== "bytes")) {
+	const got = K.describe(v.type, bytes(v.cbor));
+	if (v.xpub) check(got.keys[0].xpub === v.xpub, "xpub from " + v.type);
+	const want = v.descriptors || (v.descriptor ? [v.descriptor] : null);
+	if (want) {
+		check(JSON.stringify(got.descriptors) === JSON.stringify(want), "descriptors (with checksums) from " + v.type);
+		for (const current of [true, false]) {
+			const u = K.fromText(want.join("\n")).toUR(current);
+			check(JSON.stringify(K.describe(u.type, u.cbor).descriptors) === JSON.stringify(want), `${v.type} -> ${u.type} -> back`);
+		}
+	}
+}
+{
+	const xpub = "xpub6CatWdiZiodmUeTDp8LT5or8nmbKNcuyvz7WyksVFkKB4RHwCD3XyuvPEbvqAQY3rAPshWcMLoP2fMFMKHPJ4ZeZXYVUhLv1VMrjPC7PW6V";
+	const zpub = "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs";
+	for (const current of [true, false]) {
+		const z = K.fromText(zpub).toUR(current), zd = K.describe(z.type, z.cbor);
+		check(z.type === (current ? "output-descriptor" : "crypto-output") && zd.keys[0].xpub === xpub && zd.keys[0].slip132 === zpub
+			&& noSum(zd.descriptors[0]) === `wpkh(${xpub})`, "zpub (BIP-84's) as " + z.type);
+		const x = K.fromText(xpub).toUR(current);
+		check(x.type === (current ? "hdkey" : "crypto-hdkey") && K.describe(x.type, x.cbor).keys[0].xpub === xpub, "bare xpub as " + x.type);
+	}
+	check(K.checksum("wpkh([73c5da0a/84'/0'/0']" + xpub + "/0/*)") === "wc3n3van", "descriptor checksum");
+	check(throws(() => K.fromText("wpkh([73c5da0a/84'/0'/0']" + xpub + "/0/*)#wc3n3vaa")), "wrong checksum refused");
+	check(throws(() => K.fromText("xprv9ybY78BftS5UGANki6oSifuQEjkpyAC8ZmBvBNTshQnCBcxnefjHS7buPMkkqhcRzmoGZ5bokx7GuyDAiktd5HemohAU4wV1ZPMDRmLpBMm")), "xprv refused");
+	check(throws(() => K.fromText("wpkh(xprv9ybY78BftS5UGANki6oSifuQEjkpyAC8ZmBvBNTshQnCBcxnefjHS7buPMkkqhcRzmoGZ5bokx7GuyDAiktd5HemohAU4wV1ZPMDRmLpBMm)")), "descriptor with xprv refused");
+	check(throws(() => K.fromText("pkh(KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73sVHnoWn)")), "WIF refused");
+	check(K.looksLikeKeys(xpub) && K.looksLikeKeys("wpkh([") && !K.looksLikeKeys("cHNidP8") && !K.looksLikeKeys("abandon ability"), "keys recognised");
+}
+
 // a seed in parts (other senders may split one): back as the whole UR, then the seed
 {
 	const s = vectors.find((v) => v.entropy && v.pin), dec = new U.FountainDecoder();
