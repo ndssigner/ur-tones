@@ -34,7 +34,10 @@ signer, the devices it works with, and the backup's limits.
   (32 parity bytes) written in base 15 as the step from one tone to the
   next, so a tone **never follows itself**: an echo cannot pass for a second
   tone. Two misheard tones are always repaired, four almost always, and one
-  lost or extra tone too. Long PSBTs go as multi-part URs with their fountain
+  lost or extra tone too. Any UR type goes through (`crypto-psbt`,
+  `crypto-seed`, `crypto-hdkey`, `crypto-account`, `crypto-output`, `bytes`,
+  their newer names, or any other by name). Long messages — PSBTs, an
+  account with several xpubs — go as multi-part URs with their fountain
   codes: a lost frame costs one frame.
 - **Keypad mode**: a seed as `*`, the Standard SeedQR digits (four per word),
   `#`. Any phone can key it, at any pace. For cables and quiet rooms.
@@ -56,11 +59,21 @@ See [SPEC.md](SPEC.md).
 For wallets that do not speak tones yet:
 
 - **Play**: paste a PSBT (from Sparrow: *Copy as Base64*, or open the `.psbt`
-  file), UR texts or a test seed, and play them as tones — by cable or
-  through the air — or save a WAV.
+  file), UR texts (`ur:…`: xpubs, descriptors, accounts — one too long for a
+  frame is split into parts) or a test seed, and play them as tones — by
+  cable or through the air — or save a WAV.
+- **New seed** (test seeds): from the browser's random numbers, from 50 or
+  99 dice rolls hashed as SeedSigner does (so another device can check it),
+  or from both mixed. It stays hidden; give it a PIN and save it as a WAV.
 - **Listen** with the microphone (or open a WAV) and get the PSBT back, to
-  paste into Sparrow (*File → Open Transaction → From Text*), with a live
-  view of the level, the tones, the frames and the parts heard.
+  paste into Sparrow (*File → Open Transaction → From Text*), any other UR
+  as its `ur:` text to copy, or a seed — with a live view of the level, the
+  tones, the frames and the parts heard.
+
+A seed's words, made or received, are shown only when asked for, after a
+warning about who and what can see the screen. Plain `xpub…`/`zpub…` text
+and descriptors are not converted to URs yet, nor URs back to them: paste
+and copy the `ur:` text.
 
 It is a single file that cannot connect anywhere: its Content-Security-Policy
 forbids every network request, external script and `eval`; only its own
@@ -80,10 +93,14 @@ air-gapped device.
   with no `malloc` and **no floating point** (integer Goertzel, a sine
   table): about 12 KB of ARM code, for CPUs without an FPU like the
   Nintendo DSi's (NDS-Signer). `tests/test_c.py` checks it against the
-  vectors and the Python reference, audio included, both ways.
-- `vectors/ur-tones-v0.json`: test vectors, public test seeds and testnet
-  PSBTs only (`tools/gen_vectors.py`, cross-checked with the UR library
-  SeedSigner bundles and with embit).
+  vectors and the Python reference, audio included, both ways. Like the
+  Python reference, it carries one UR part per frame; joining the parts of a
+  multi-part UR (fountain codes) is left to a UR library.
+- `vectors/ur-tones-v0.json`: test vectors, public test data only — test
+  seeds, testnet PSBTs, and the xpubs and descriptors of the BIP-39 test
+  seed (`crypto-hdkey`, `crypto-output`, `crypto-account`) and `bytes`
+  (`tools/gen_vectors.py`, cross-checked with the UR library SeedSigner
+  bundles, embit and urtypes).
 - `tests/test_reference.py`: vectors, error repair, and audio through a
   simulated acoustic channel (`tests/acoustic.py`: a small speaker, a room's
   echo, noise), at several paces and sample rates, and keyed at a person's

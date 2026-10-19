@@ -20,7 +20,7 @@ const UR_TONES_TEXT = {
 		safe: [
 			"This online page is a demo, to try things out.",
 			"For real use, download the release package, check its SHA-256 and open the .html on a computer that is offline.",
-			"Until there is a release, you can save this page: it is a single file, and it can connect nowhere.",
+			"Saving this page also works: it is a single file, and it can connect nowhere; check it against the release's SHA-256.",
 		],
 		releases: "Releases ↗",
 		startTitle: "Start",
@@ -147,7 +147,7 @@ const UR_TONES_TEXT = {
 		safe: [
 			"Esta página online es una demo, para probar.",
 			"Para usarla de verdad, descarga el paquete de la versión publicada, comprueba su SHA-256 y abre el .html en un ordenador desconectado.",
-			"Mientras no haya versión publicada, puedes guardar esta página: es un único archivo y no puede conectarse a nada.",
+			"También sirve guardar esta página: es un único archivo y no puede conectarse a nada; compruébala con el SHA-256 de la versión publicada.",
 		],
 		releases: "Versiones ↗",
 		startTitle: "Empezar",

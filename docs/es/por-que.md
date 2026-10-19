@@ -99,9 +99,13 @@ y fuera de alcance. Quien encuentre la grabación sin el PIN obtiene una
 cartera distinta, válida y vacía; quien tenga el PIN sin la grabación no
 tiene nada.
 
-Para recuperarla, se la reproduces al firmador (o a la herramienta web, sin
-conexión) y escribes el PIN; comprueba la **huella** que muestran los dos
-lados.
+Para hacerla, la herramienta web (sin conexión) también puede crear la
+semilla: con los números aleatorios del navegador, con 50 o 99 tiradas de
+dado calculadas como hace SeedSigner (así otro aparato puede comprobar el
+resultado), o con ambos; enseña las palabras solo cuando se le piden, para
+apuntarlas, y luego inventa el PIN y guarda el WAV. Para recuperarla, se la
+reproduces al firmador (o a la herramienta web, sin conexión) y escribes el
+PIN; comprueba la **huella** que muestran los dos lados.
 
 Conviene ser honesto con sus límites:
 

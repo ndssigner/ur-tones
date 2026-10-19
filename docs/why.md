@@ -93,8 +93,12 @@ file, and the **PIN kept somewhere else**, unrelated and out of reach.
 Whoever finds the recording without the PIN gets a different, valid and
 empty wallet; whoever has the PIN without the recording has nothing.
 
-To restore it, play it to the signer (or to the web tool, offline) and type
-the PIN; check the **fingerprint** that both sides show.
+To make one, the web tool (offline) can also make the seed: from the
+browser's random numbers, from 50 or 99 dice rolls hashed as SeedSigner
+does (so another device can check the result), or from both; it shows the
+words only when asked, to write them down, then makes up the PIN and saves
+the WAV. To restore it, play it to the signer (or to the web tool, offline)
+and type the PIN; check the **fingerprint** that both sides show.
 
 Be honest with yourself about its limits:
 
