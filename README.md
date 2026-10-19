@@ -59,21 +59,27 @@ See [SPEC.md](SPEC.md).
 For wallets that do not speak tones yet:
 
 - **Play**: paste a PSBT (from Sparrow: *Copy as Base64*, or open the `.psbt`
-  file), UR texts (`ur:…`: xpubs, descriptors, accounts — one too long for a
-  frame is split into parts) or a test seed, and play them as tones — by
-  cable or through the air — or save a WAV.
+  file), public keys — an `xpub` (or `ypub`, `zpub`…), an output descriptor,
+  or an account's descriptors one per line —, UR texts (`ur:…`; one too
+  long for a frame is split into parts) or a test seed, and play them as
+  tones — by cable or through the air — or save a WAV.
 - **New seed** (test seeds): from the browser's random numbers, from 50 or
   99 dice rolls hashed as SeedSigner does (so another device can check it),
   or from both mixed. It stays hidden; give it a PIN and save it as a WAV.
 - **Listen** with the microphone (or open a WAV) and get the PSBT back, to
-  paste into Sparrow (*File → Open Transaction → From Text*), any other UR
-  as its `ur:` text to copy, or a seed — with a live view of the level, the
-  tones, the frames and the parts heard.
+  paste into Sparrow (*File → Open Transaction → From Text*); public keys
+  as their descriptors and xpubs (with the `ypub`/`zpub` form where the
+  script says which); any other UR as its `ur:` text; or a seed — with a
+  live view of the level, the tones, the frames and the parts heard.
 
-A seed's words, made or received, are shown only when asked for, after a
-warning about who and what can see the screen. Plain `xpub…`/`zpub…` text
-and descriptors are not converted to URs yet, nor URs back to them: paste
-and copy the `ur:` text.
+Public keys go as **today's UR types** — `hdkey`, `output-descriptor`
+(BCR-2023-010) and `account-descriptor` (BCR-2023-019), the ones Sparrow
+reads — or, for older wallets and signers, as `crypto-hdkey`,
+`crypto-output` and `crypto-account`; both are read. Private keys (`xprv`,
+WIF) are refused. A seed's words, made or received, are shown only when
+asked for, after a warning about who and what can see the screen: write
+them on paper or metal, or keep them as things with
+[Seedcraft](https://github.com/ndssigner/seedcraft).
 
 It is a single file that cannot connect anywhere: its Content-Security-Policy
 forbids every network request, external script and `eval`; only its own
@@ -100,7 +106,9 @@ air-gapped device.
   seeds, testnet PSBTs, and the xpubs and descriptors of the BIP-39 test
   seed (`crypto-hdkey`, `crypto-output`, `crypto-account`) and `bytes`
   (`tools/gen_vectors.py`, cross-checked with the UR library SeedSigner
-  bundles, embit and urtypes).
+  bundles, embit and urtypes). `vectors/bcr-keys.json`: Blockchain
+  Commons' own vectors for `account-descriptor` and `output-descriptor`,
+  which the web tool reads and writes byte for byte.
 - `tests/test_reference.py`: vectors, error repair, and audio through a
   simulated acoustic channel (`tests/acoustic.py`: a small speaker, a room's
   echo, noise), at several paces and sample rates, and keyed at a person's

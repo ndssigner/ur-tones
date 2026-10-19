@@ -96,9 +96,11 @@ empty wallet; whoever has the PIN without the recording has nothing.
 To make one, the web tool (offline) can also make the seed: from the
 browser's random numbers, from 50 or 99 dice rolls hashed as SeedSigner
 does (so another device can check the result), or from both; it shows the
-words only when asked, to write them down, then makes up the PIN and saves
-the WAV. To restore it, play it to the signer (or to the web tool, offline)
-and type the PIN; check the **fingerprint** that both sides show.
+words only when asked, to write them down (on paper or metal, or as a
+[Seedcraft](https://github.com/ndssigner/seedcraft) sequence of things),
+then makes up the PIN and saves the WAV. To restore it, play it to the
+signer (or to the web tool, offline) and type the PIN; check the
+**fingerprint** that both sides show.
 
 Be honest with yourself about its limits:
 
@@ -118,8 +120,9 @@ Be honest with yourself about its limits:
   different media, and play the backup to a signer now and then (with the
   fingerprint) to check that it still reads.
 - **It is a draft format.** Do not make it the only backup of real funds
-  yet; next to a backup on paper or metal, it adds a copy that does not
-  look like a seed.
+  yet; next to a backup on paper or metal (or a
+  [Seedcraft](https://github.com/ndssigner/seedcraft) one, made of
+  things), it adds a copy that does not look like a seed.
 
 See also [Seedcraft](https://github.com/ndssigner/seedcraft), which backs a
 seed up as a sequence of physical things.
