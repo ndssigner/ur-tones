@@ -40,6 +40,21 @@ check(C.fingerprint(C.mnemonicToEntropy("height demise useless trap grow lion fo
 check(hex(C.pbkdf2Sha256(enc.encode("1234"), enc.encode(C.PIN_SALT), 10000, 32))
 	=== pbkdf2Sync("1234", C.PIN_SALT, 10000, 32, "sha256").toString("hex"), "pbkdf2");
 
+// new seeds from dice: SeedSigner's tests (tests/test_mnemonic_generation.py), and Coldcard's sample for 24 words
+for (const [rolls, words, mnemonic] of [
+	["12345612345612345612345612345612345612345612345612", 12, "unveil nice picture region tragic fault cream strike tourist control recipe tourist"],
+	["11111111111111111111111111111111111111111111111111", 12, "diet glad hat rural panther lawsuit act drop gallery urge where fit"],
+	["522222222222222222222222222222222222222222222555555555555555555555555555555555555555555555555555555", 24, "resource timber firm banner horror pupil frozen main pear direct pioneer broken grid core insane begin sister pony end debate task silk empty curious"],
+	["222222222222222222222222222222222222222222222555555555555555555555555555555555555555555555555555556", 24, "lizard broken love tired depend eyebrow excess lonely advance father various cram ignore panic feed plunge miss regret boring unique galaxy fan detail fly"],
+]) check(C.entropyToMnemonic(C.diceEntropy(rolls, words)) === mnemonic, "dice " + rolls.slice(0, 12));
+check(hex(C.sha256(enc.encode("123456"))) === hex(C.mnemonicToEntropy("mirror reject rookie talk pudding throw happy era myth already payment own sentence push head sting video explain letter bomb casual hotel rather garment")), "dice: Coldcard's sample");
+for (const [rolls, words] of [["1".repeat(49), 12], ["1".repeat(51), 12], ["1".repeat(49) + "7", 12], ["1".repeat(50), 24], ["1".repeat(99), 18]])
+	check((() => { try { C.diceEntropy(rolls, words); return false; } catch (e) { return true; } })(), `dice refused: ${rolls.length} for ${words}`);
+{
+	const rolls = "3".repeat(50), extra = Uint8Array.from({ length: 32 }, (_, i) => i);
+	check(hex(C.diceEntropy(rolls, 12, extra)) === createHash("sha256").update(rolls).update(extra).digest("hex").slice(0, 32), "dice mixed with extra bytes");
+}
+
 // vectors
 const vectors = JSON.parse(read("../vectors/ur-tones-v0.json")).vectors;
 check(C.fingerprint(C.mnemonicToEntropy(vectors.find((v) => v.mnemonic && v.mnemonic.split(" ").length === 24).mnemonic)) === "8c65eb9f", "fingerprint 24 words (embit)");

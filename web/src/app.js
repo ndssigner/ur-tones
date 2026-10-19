@@ -9,7 +9,8 @@
 	const st = {
 		lang: (navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en",
 		screen: "intro",
-		send: { text: "", mode: "data", pin: "", made: "", pace: "cable" },
+		// generated: a new seed's entropy (never put in the text box, where it would show)
+		send: { text: "", mode: "data", pin: "", made: "", pace: "cable", generated: null, gen: { open: false, words: 12, source: "browser", rolls: "" } },
 	};
 	const T = () => UR_TONES_TEXT[st.lang];
 	// SPEC §1.1. Keypad mode's digits repeat: never faster than 80 + 80 ms
@@ -91,6 +92,23 @@
 			b.textContent = "✓ " + t.copied; setTimeout(() => { b.textContent = t.copy; }, 1500);
 		} } }, t.copy);
 		return b;
+	}
+
+	// A seed's words, only after a warning about who and what can see the screen
+	const wordsGrid = (entropy) => h("div", { class: "words" },
+		S.entropyToMnemonic(entropy).split(" ").map((w, i) => h("div", {}, h("span", { text: String(i + 1) }), w)));
+	function revealWords(entropy) {
+		const t = T(), box = h("div", { class: "stack" });
+		function hide() {
+			box.replaceChildren(h("div", { class: "note" }, h("b", { text: t.revealTitle }),
+				h("ul", { class: "list" }, t.revealRisks.map((x) => h("li", { text: x })))),
+			h("div", { class: "row" }, h("button", { class: "btn ghost", on: { click: show } }, t.revealShow)));
+		}
+		function show() {
+			box.replaceChildren(wordsGrid(entropy), h("div", { class: "row" }, h("button", { class: "btn ghost small", on: { click: hide } }, t.revealHide)));
+		}
+		hide();
+		return box;
 	}
 
 	// ---- what to send ------------------------------------------------
@@ -203,8 +221,34 @@
 		const view = { status: h("div", { class: "status", text: "" }), keys: h("div", { class: "keys" }), bar: h("div", {}) };
 		const info = h("div", { class: "detected" });
 		const options = h("div", { class: "stack" }), live = h("div", { class: "stack" });
-		const area = h("textarea", { class: "input", rows: 4, spellcheck: "false", autocomplete: "off", placeholder: "cHNidP8BA… · ur:crypto-psbt/… · abandon ability …" });
+		const PLACEHOLDER = "cHNidP8BA… · ur:crypto-psbt/… · abandon ability …";
+		const area = h("textarea", { class: "input", rows: 4, spellcheck: "false", autocomplete: "off", placeholder: PLACEHOLDER });
 		area.value = s.text;
+		const genBtn = h("button", { class: "btn ghost small" });
+		// a new seed: from the browser's random numbers, from dice, or both (SPEC: diceEntropy)
+		function generator() {
+			const g = s.gen, need = S.DICE_ROLLS[g.words], dice = g.source !== "browser";
+			const count = h("span", { class: "meta" });
+			const make = h("button", { class: "btn", on: { click: () => {
+				const random = (n) => crypto.getRandomValues(new Uint8Array(n));
+				s.generated = dice ? S.diceEntropy(g.rolls, g.words, g.source === "mixed" ? random(32) : null) : random(g.words * 4 / 3);
+				g.rolls = ""; g.open = false;
+				update();
+			} } }, t.genMake);
+			const show = () => { count.textContent = t.genRollsCount(g.rolls.length, need); make.disabled = dice && g.rolls.length !== need; };
+			// the rolls are the seed: masked, like a password, and forgotten once used
+			const rolls = h("input", { class: "pin rolls", type: "password", inputmode: "numeric", autocomplete: "off", spellcheck: "false", placeholder: t.genRollsHint,
+				on: { input: (e) => { g.rolls = e.target.value.replace(/[^1-6]/g, ""); e.target.value = g.rolls; show(); } } });
+			rolls.value = g.rolls;
+			show();
+			return h("div", { class: "stack" },
+				field(t.genWords, seg([[12, "12"], [24, "24"]], g.words, (v) => { g.words = v; update(); })),
+				field(t.genSource, seg([["browser", t.genBrowser, t.genBrowserHelp], ["dice", t.genDice, t.genDiceHelp(need)],
+					["mixed", t.genMixed, t.genMixedHelp(need)]], g.source, (v) => { g.source = v; update(); })),
+				dice ? field(t.genRolls, h("div", { class: "row" }, rolls, count)) : null,
+				h("div", { class: "row" }, make,
+					h("button", { class: "btn ghost", on: { click: () => { g.open = false; g.rolls = ""; update(); } } }, t.genCancel)));
+		}
 		const fileInput = h("input", { type: "file", class: "hidden", on: { change: async (e) => {
 			const f = e.target.files[0];
 			if (!f) return;
@@ -214,14 +258,21 @@
 		} } });
 		function update() {
 			stopPlaying();
-			const input = parseInput(s.text);
+			const input = s.generated ? { kind: "seed", entropy: s.generated, words: s.generated.length * 3 / 4, generated: true } : parseInput(s.text);
+			area.disabled = !!s.generated;
+			area.placeholder = s.generated ? t.genHidden : PLACEHOLDER;
+			genBtn.textContent = s.generated ? t.genDiscard : "🎲 " + t.newSeed;
+			genBtn.onclick = s.generated ? () => { s.generated = null; update(); }
+				: () => { s.text = area.value = ""; s.gen.open = true; update(); };
 			info.className = "detected " + (!input ? "" : input.kind !== "bad" ? "ok" : "bad");
 			info.textContent = !input ? "" : input.kind === "psbt" ? t.detected.psbt(input.psbt.length, input.parts)
 				: input.kind === "urs" ? t.detected.urs(input.urs.length, input.type)
 				: input.kind === "long" ? t.detected.long(input.parts, input.type)
+				: input.generated ? t.detected.newSeed(input.words)
 				: input.kind === "seed" ? t.detected.seed(input.words) : t.detected.bad;
 			options.replaceChildren(); live.replaceChildren();
 			if (!input || input.kind === "bad") {
+				if (!input && s.gen.open) options.append(generator());
 				live.append(h("div", { class: "empty" }, h("div", { text: t.inputHint }),
 					h("button", { class: "btn ghost small", on: { click: () => { s.text = area.value = TEST_SEED; update(); } } }, t.tryTestSeed)));
 				return;
@@ -254,6 +305,7 @@
 						download(TN.wav(TN.render(list, 44100, pace.tone, pace.gap, 2 * pace.pause), 44100), "ur-tones.wav", "audio/wav");
 					} } }, t.saveWav)),
 				input.kind === "seed" ? fingerprintBox(input.entropy, t.fingerprintSend) : null,
+				input.generated ? revealWords(input.entropy) : null,
 				view.status, h("div", { class: "bar-track" }, view.bar), view.keys);
 			if (input.kind === "seed" && s.mode === "keypad") {
 				const digits = round[0].slice(1, -1).match(/.{4}/g);
@@ -265,7 +317,7 @@
 		update();
 		return h("div", { class: "tool" },
 			panel(field(t.input, area,
-				h("div", { class: "row" }, info, h("button", { class: "btn ghost small push", on: { click: () => fileInput.click() } }, t.openFile), fileInput)),
+				h("div", { class: "row" }, info, h("button", { class: "btn ghost small push", on: { click: () => fileInput.click() } }, t.openFile), genBtn, fileInput)),
 				options),
 			panel(live));
 	}
@@ -345,9 +397,7 @@
 			}
 		}
 		function gotSeed(entropy) {
-			const words = S.entropyToMnemonic(entropy).split(" ");
-			finish(done(t.gotSeed, seedAlert(), fingerprintBox(entropy, t.fingerprintReceive),
-				h("div", { class: "words" }, words.map((w, i) => h("div", {}, h("span", { text: String(i + 1) }), w))),
+			finish(done(t.gotSeed, seedAlert(), fingerprintBox(entropy, t.fingerprintReceive), revealWords(entropy),
 				L.pin ? h("div", { class: "hint", text: t.pinApplied }) : null));
 		}
 		function onGroup(g) {

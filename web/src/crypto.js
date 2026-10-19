@@ -367,5 +367,19 @@ const UrTonesCrypto = (() => {
 		return [fixed, positions.length];
 	}
 
-	return { PIN_SALT, DecodeError, sha256, sha512, ripemd160, fingerprint, pbkdf2Sha256, normalizePin, pinXor, mnemonicToEntropy, entropyToMnemonic, rsCorrect };
+	// ---- a new seed from dice ------------------------------------------
+	// SeedSigner's method (also Ian Coleman's and bitcoiner.guide's "Hex" mode,
+	// and Coldcard's for 24 words): the rolls as text, 1 to 6, hashed with
+	// SHA-256; 12 words take its first 16 bytes. 50 rolls carry 129 bits, 99
+	// carry 255. `extra` (bytes, optional) is mixed in after the rolls: then no
+	// other tool gives the same seed from the same rolls.
+	const DICE_ROLLS = { 12: 50, 24: 99 };
+	function diceEntropy(rolls, words, extra) {
+		if (!DICE_ROLLS[words] || !/^[1-6]*$/.test(rolls) || rolls.length !== DICE_ROLLS[words])
+			throw new DecodeError(`${DICE_ROLLS[words]} rolls of 1 to 6 expected`);
+		const h = sha256(extra ? concat(ascii(rolls), extra) : ascii(rolls));
+		return h.slice(0, words * 4 / 3);
+	}
+
+	return { PIN_SALT, DICE_ROLLS, DecodeError, sha256, sha512, ripemd160, fingerprint, pbkdf2Sha256, normalizePin, pinXor, mnemonicToEntropy, entropyToMnemonic, diceEntropy, rsCorrect };
 })();
