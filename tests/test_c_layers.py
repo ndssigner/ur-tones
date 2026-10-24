@@ -384,6 +384,102 @@ def test_keys_from_detections():
     check(int(sizes["ut_listener"]) < 6144, "ut_listener under 6 KB: %s" % sizes["ut_listener"])
 
 
+# ---- layer 2: keys, from tone events (decoder chips) --------------------------------
+
+def events(lib, tones, start=0, close=True):
+    """Groups from (key, start ms, end ms) tones, as a decoder chip gives them."""
+    k = ctypes.create_string_buffer(STRUCT)
+    lib.ut_keys_init(k, 1, 1000)
+    groups = []
+    for key, a, b in tones:
+        lib.ut_keys_tone(k, key.encode(), (start + a) & 0xFFFFFFFF, (start + b) & 0xFFFFFFFF)
+        groups += take_groups(lib, k)
+    if close:
+        lib.ut_keys_time(k, (start + tones[-1][2] + 301) & 0xFFFFFFFF)
+        groups += take_groups(lib, k)
+    return groups, k
+
+
+def played(keys, tone=40, gap=20, at=0):
+    out = []
+    for key in keys:
+        out.append((key, at, at + tone))
+        at += tone + gap
+    return out
+
+
+def test_tone_events():
+    lib = build("ut_layers")
+    declare_keys(lib)
+    lib.ut_keys_tone.argtypes = [ctypes.c_void_p, ctypes.c_char, ctypes.c_uint32, ctypes.c_uint32]
+    lib.ut_keys_time.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    check(events(lib, [("1", 0, 80), ("2", 304, 384)])[0] == ["12"], "224 ms apart: one group")
+    check(events(lib, [("1", 0, 80), ("2", 306, 386)])[0] == ["1", "2"], "226 ms apart: two groups")
+    groups, k = events(lib, [("5", 1000, 1080)], close=False)
+    lib.ut_keys_time(k, 1080 + 299)
+    check(take_groups(lib, k) == [], "299 ms of silence: still open")
+    lib.ut_keys_time(k, 1080 + 301)
+    check(take_groups(lib, k) == ["5"], "301 ms of silence: closed")
+    seed = next(v["keypad"] for v in VECTORS if "keypad" in v)
+    slow = [(key, 1000 * i, 1000 * i + 100) for i, key in enumerate(seed)]
+    groups, k = events(lib, slow, close=False)
+    for t in range(0, 1000 * len(seed), 250):
+        lib.ut_keys_time(k, t)
+        groups += take_groups(lib, k)
+    check(groups == [seed], "keypad mode, a key a second: one group")
+    check(events(lib, played("AAB"))[0] == ["AB"], "data: a repeat is an echo")
+    _, k = events(lib, played("12A"), close=False)
+    live = ctypes.create_string_buffer(64)
+    lib.ut_keys_live(k, live, 64)
+    check(live.value == b"12A", "live keys from tones")
+    check(events(lib, played("123", 80, 80), start=0xFFFFFF00)[0] == ["123"], "the clock wraps mid-group")
+    check(events(lib, played("1") + played("2", at=500), start=0xFFFFFF00)[0] == ["1", "2"], "the clock wraps mid-pause")
+    out, ok = ctypes.create_string_buffer(1200), True
+    for v in VECTORS:
+        for ur, frame in zip(v.get("urs", [v.get("ur")]), v["frames"]):
+            groups, _ = events(lib, played(frame))
+            fixed = c_int()
+            ok &= len(groups) == 1 and lib.ut_frame_to_ur(groups[0].encode(), out, 1200, ctypes.byref(fixed)) > 0 \
+                and out.value.decode() == ur
+    check(ok, "every vector frame from a decoder chip")
+
+
+# ---- layer 2: the player (generator chips) --------------------------------------------
+
+class Timing(ctypes.Structure):
+    _fields_ = [("tone_ms", ctypes.c_uint16), ("gap_ms", ctypes.c_uint16), ("pause_ms", ctypes.c_uint16)]
+
+
+def test_player():
+    lib = build("ut_layers")
+    lib.ut_player_init.argtypes = [ctypes.c_void_p, c_char_p, ctypes.POINTER(Timing)]
+    lib.ut_player_next.argtypes = [ctypes.c_void_p, c_char_p, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+    p, keep = ctypes.create_string_buffer(STRUCT), ctypes.create_string_buffer(b"CBAD1")
+    lib.ut_player_init(p, keep, ctypes.byref(Timing(40, 20, 400)))
+    steps, key, on, off = [], ctypes.create_string_buffer(1), ctypes.c_uint32(), ctypes.c_uint32()
+    while lib.ut_player_next(p, key, ctypes.byref(on), ctypes.byref(off)):
+        steps.append((key.raw.decode().strip("\0"), on.value, off.value))
+    check(steps == [("", 0, 400)] + [(k, 40, 20) for k in "CBAD1"] + [("", 0, 400)], "player steps: %s" % steps)
+    # the synthesiser plays the same spans (within 1 ms)
+    pcm = render(lib, ["CBAD1"], 8000, 40, 20, 400)
+    spans, i = [], 0
+    while i < len(pcm):
+        if pcm[i]:
+            j = i
+            while j < len(pcm) and any(pcm[j:j + 4]):
+                j += 1
+            spans.append((i, j))
+            i = j
+        i += 1
+    t, want = 0, []
+    for k, a, b in steps:
+        if k:
+            want.append((t + 0, t + 8 * a))
+        t += 8 * (a + b)
+    check(len(spans) == len(want) and all(abs(s[0] - w[0]) <= 8 and abs(s[1] - w[1]) <= 8 for s, w in zip(spans, want)),
+          "synth and player agree: %s vs %s" % (spans[:3], want[:3]))
+
+
 def main():
     test_config()
     test_globals()
@@ -391,6 +487,8 @@ def main():
     test_int32_results()
     test_detector()
     test_keys_from_detections()
+    test_tone_events()
+    test_player()
     print("%s: %d checks, %d failures" % ("ok" if not failures else "FAIL", checks, failures))
     sys.exit(1 if failures else 0)
 

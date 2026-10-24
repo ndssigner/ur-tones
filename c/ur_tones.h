@@ -235,6 +235,25 @@ void ut_synth_init(ut_synth *s, const char *tones, uint32_t rate,
 /* Writes up to n samples; returns how many (0: done). */
 size_t ut_synth_read(ut_synth *s, int16_t *out, size_t n);
 
+/* ---- sending through a DTMF generator chip (HT9200…) ---------------------
+ * The same timing as ut_synth, as steps: a key (0: silence) held for on_ms,
+ * then off_ms of silence. */
+typedef struct { uint16_t tone_ms, gap_ms, pause_ms; } ut_timing;
+#define UT_TIMING_CABLE { 40, 20, 400 }   /* SPEC §1.1's recommendations */
+#define UT_TIMING_AIR   { 80, 80, 600 }
+
+typedef struct {
+	const char *tones;        /* kept, not copied */
+	size_t count, index;
+	ut_timing t;
+	int stage;                /* 0 opening pause, 1 tones, 2 final pause, 3 done */
+} ut_player;
+
+void ut_player_init(ut_player *p, const char *tones, const ut_timing *t);
+/* The next step: the opening pause (key 0), each key with its gap, the
+ * final pause (key 0). Returns 1, or 0 when done. */
+int32_t ut_player_next(ut_player *p, char *key, uint32_t *on_ms, uint32_t *off_ms);
+
 /* ---- layer 1 · samples to detections (SPEC appendix A) -------------------
  * Every 10 ms, the eight DTMF frequencies over the last 25 ms (Goertzel, in
  * integers, after bringing the rate down to about 8 kHz): one detection, a
@@ -303,6 +322,14 @@ typedef struct {
 void ut_keys_init(ut_keys *k, uint32_t tick_num, uint32_t tick_den);
 /* One detection per tick (ut_detector_push's, or one's own DSP's). */
 void ut_keys_detection(ut_keys *k, char key, int16_t level);
+/* Or, from a DTMF decoder chip (MT8870, HT9170: StD's rising and falling
+ * edges), a whole tone, start and end in ticks; the chip has done what the
+ * segmenter does. One ut_keys takes detections or tones, not both. Ticks
+ * may wrap around 2^32. */
+void ut_keys_tone(ut_keys *k, char key, uint32_t start, uint32_t end);
+/* With tones: time passes. Closes a group after 300 ms of silence (a frame's
+ * end), as detections of silence do. */
+void ut_keys_time(ut_keys *k, uint32_t now);
 /* At the end of the input: closes what is pending. */
 void ut_keys_flush(ut_keys *k);
 /* The next group of keys (a frame, or keypad mode), or 0 if none. */

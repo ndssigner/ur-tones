@@ -1473,6 +1473,39 @@ UT_HOT size_t ut_synth_read(ut_synth *s, int16_t *out, size_t n)
 	return w;
 }
 
+/* ---- the same timing as steps, for a generator chip --------------------------- */
+
+void ut_player_init(ut_player *p, const char *tones, const ut_timing *t)
+{
+	memset(p, 0, sizeof *p);
+	p->tones = tones;
+	p->count = strlen(tones);
+	p->t = *t;
+}
+
+int32_t ut_player_next(ut_player *p, char *key, uint32_t *on_ms, uint32_t *off_ms)
+{
+	*key = 0;
+	*on_ms = 0;
+	*off_ms = p->t.pause_ms;
+	switch (p->stage) {
+	case 0:
+		p->stage = p->count ? 1 : 2;
+		return 1;
+	case 1:
+		*key = p->tones[p->index++];
+		*on_ms = p->t.tone_ms;
+		*off_ms = p->t.gap_ms;
+		if (p->index == p->count) p->stage = 2;
+		return 1;
+	case 2:
+		p->stage = 3;
+		return 1;
+	default:
+		return 0;
+	}
+}
+
 /* ---- listening (SPEC appendix A) ------------------------------------------------ */
 
 void ut_detector_init(ut_detector *d, uint32_t rate)
@@ -1716,6 +1749,18 @@ void ut_keys_detection(ut_keys *k, char key, int16_t level)
 		seg_cut(k);
 		if (!keypad_open(k)) group_close(k);
 	}
+}
+
+void ut_keys_tone(ut_keys *k, char key, uint32_t start, uint32_t end)
+{
+	if (k->nlive < UT_LIVE) k->live[k->nlive++] = key;
+	tone(k, key, start, end);
+}
+
+void ut_keys_time(ut_keys *k, uint32_t now)
+{
+	if (k->clen && !keypad_open(k) && (uint64_t)(now - k->last_end) * k->num * 1000 >= (uint64_t)300 * k->den)
+		group_close(k);
 }
 
 void ut_keys_flush(ut_keys *k)
