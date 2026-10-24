@@ -480,6 +480,70 @@ def test_player():
           "synth and player agree: %s vs %s" % (spans[:3], want[:3]))
 
 
+# ---- layer 3: frames as bytes ----------------------------------------------------------
+
+class Frame(ctypes.Structure):
+    _fields_ = [("kind", ctypes.c_uint8), ("type", ctypes.c_char * 219), ("body", ctypes.c_uint8 * 255), ("n", ctypes.c_uint8)]
+
+
+def declare_frames(lib):
+    fp = ctypes.POINTER(Frame)
+    lib.ut_frame_decode.argtypes = [c_char_p, fp, ctypes.POINTER(c_int)]
+    lib.ut_frame_encode.argtypes = [fp, c_char_p, c_size_t]
+    lib.ut_frame_from_ur.argtypes = [c_char_p, fp]
+    lib.ut_frame_ur.argtypes = [fp, c_char_p, c_size_t]
+
+
+def damaged(rng, frame):
+    """A frame with a few misheard tones, a lost one or an extra one."""
+    f = list(frame)
+    how = rng.choice(("misheard", "lost", "extra"))
+    i = rng.randrange(4, len(f))
+    if how == "lost":
+        del f[i]
+    elif how == "extra":
+        f.insert(i, next(k for k in st.KEYS if k not in (f[i - 1], f[i])))
+    else:
+        for j in rng.sample(range(4, len(f)), rng.randint(1, 20)):
+            f[j] = rng.choice([k for k in st.KEYS if k not in (f[j], f[j - 1], (f + [""])[j + 1])])
+    return "".join(f)
+
+
+def test_frames():
+    import random
+    lib, old = build("ut_layers"), build_old()
+    declare_frames(lib)
+    f, tones, ur_out = Frame(), ctypes.create_string_buffer(1200), ctypes.create_string_buffer(1200)
+    ok = True
+    for v in VECTORS:
+        for ur, frame in zip(v.get("urs", [v.get("ur")]), v["frames"]):
+            ok &= lib.ut_frame_from_ur(ur.encode(), ctypes.byref(f)) == f.n > 0
+            ok &= lib.ut_frame_encode(ctypes.byref(f), tones, 1200) > 0 and tones.value.decode() == frame
+            fixed = c_int(-1)
+            ok &= lib.ut_frame_decode(frame.encode(), ctypes.byref(f), ctypes.byref(fixed)) == f.n and fixed.value == 0
+            ok &= lib.ut_frame_ur(ctypes.byref(f), ur_out, 1200) > 0 and ur_out.value.decode() == ur
+    check(ok, "frames as bytes: every vector both ways")
+    rng, same = random.Random(3), 0
+    cases = [damaged(rng, fr) for fr in some_frames(20) for _ in range(8)]
+    for bad in cases:
+        a, b = c_int(-1), c_int(-1)
+        n_old = old.ut_frame_to_ur(bad.encode(), ur_out, 1200, ctypes.byref(a))
+        want = (n_old, ur_out.value if n_old >= 0 else None, a.value if n_old >= 0 else None)
+        n = lib.ut_frame_decode(bad.encode(), ctypes.byref(f), ctypes.byref(b))
+        got = (n, None, None) if n < 0 else (lib.ut_frame_ur(ctypes.byref(f), ur_out, 1200), ur_out.value, b.value)
+        same += got == want
+    check(same == len(cases), "damaged frames: decoded as before (%d of %d)" % (same, len(cases)))
+    f2 = Frame(kind=0, type=b"a" * 218, n=1)
+    f2.body[0] = 0
+    check(lib.ut_frame_encode(ctypes.byref(f2), tones, 1200) > 0, "a 218-character type fits")
+    n = lib.ut_frame_ur(ctypes.byref(f2), ur_out, 1200)
+    long_ur = ur_out.value.replace(b"/", b"a/", 1)
+    check(n > 0 and lib.ut_frame_from_ur(long_ur, ctypes.byref(f)) == -5, "a 219-character type: too long")
+    r = subprocess.run([*CFLAGS, "-I", str(ROOT / "c"), "-c", str(ROOT / "tests" / "c" / "nds_compat.c"), "-o", "/dev/null"],
+                       capture_output=True, text=True)
+    check(r.returncode == 0, "NDS-Signer's calls compile: " + r.stderr[:300])
+
+
 def main():
     test_config()
     test_globals()
@@ -489,6 +553,7 @@ def main():
     test_keys_from_detections()
     test_tone_events()
     test_player()
+    test_frames()
     print("%s: %d checks, %d failures" % ("ok" if not failures else "FAIL", checks, failures))
     sys.exit(1 if failures else 0)
 

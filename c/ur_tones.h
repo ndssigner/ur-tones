@@ -110,7 +110,32 @@ enum {
 	UT_ERR_MESSAGE = -10,  /* a part of another message (start a new decoder) */
 };
 
-/* ---- frames: a UR text (single-part, or one part of a multi-part UR) ---- */
+/* ---- layer 3 · frames: tones <-> a UR's bytes (SPEC §2) --------------------
+ * A frame carries one UR (single-part, or one part of a multi-part UR): its
+ * type and its CBOR, protected by Reed-Solomon. ut_frame holds them as bytes,
+ * for devices that never need the UR as text. */
+
+#define UT_MAX_TYPE 218       /* a type of one's own, its length byte, 3 header bytes,
+                                 1 body byte and the parity fill a codeword */
+enum { UT_KIND_SINGLE = 0, UT_KIND_PART = 1 };
+
+typedef struct {
+	uint8_t kind;                 /* UT_KIND_SINGLE, UT_KIND_PART */
+	char type[UT_MAX_TYPE + 1];   /* the UR type, e.g. "crypto-psbt" */
+	uint8_t body[255];            /* the UR's CBOR */
+	uint8_t n;
+} ut_frame;
+
+/* Tones (lead-in optional) to a frame; repairs as ut_frame_to_ur. Returns n. */
+int32_t ut_frame_decode(const char *tones, ut_frame *f, int *corrected);
+/* A frame to its tones (lead-in, sync, codeword). */
+int32_t ut_frame_encode(const ut_frame *f, char *tones, size_t cap);
+/* A UR text to a frame (UT_ERR_TOO_LONG if it can't fit one). Returns n. */
+int32_t ut_frame_from_ur(const char *ur, ut_frame *f);
+/* A frame to its UR text. */
+int32_t ut_frame_ur(const ut_frame *f, char *ur, size_t cap);
+
+/* The same, UR text in and out: */
 
 /* The tones of the frame that carries `ur` (lead-in, sync, codeword). */
 int32_t ut_ur_to_frame(const char *ur, char *tones, size_t cap);

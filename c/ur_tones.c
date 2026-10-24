@@ -562,27 +562,43 @@ static int from_tones(const char *tones, size_t len, char previous, uint8_t *out
 
 /* ---- frames -------------------------------------------------------------------- */
 
-int32_t ut_ur_to_frame(const char *ur, char *tones, size_t cap)
+int32_t ut_frame_from_ur(const char *ur, ut_frame *f)
 {
 	ur_t u;
-	uint8_t cw[256];
-	size_t n = 0, code = 0;
 	int r = parse_ur(ur, &u);
 	if (r) return r;
-	if (u.n < 1 || u.n > 255) return UT_ERR_TOO_LONG;
+	size_t tl = strlen(u.type);
+	if (u.n < 1 || u.n > 255 || tl > UT_MAX_TYPE) return UT_ERR_TOO_LONG;
+	f->kind = (uint8_t)u.kind;
+	memcpy(f->type, u.type, tl + 1);
+	memcpy(f->body, u.body, u.n);
+	f->n = (uint8_t)u.n;
+	return f->n;
+}
+
+int32_t ut_frame_ur(const ut_frame *f, char *ur, size_t cap)
+{
+	return ur_text(f->type, f->kind, f->body, f->n, ur, cap);
+}
+
+int32_t ut_frame_encode(const ut_frame *f, char *tones, size_t cap)
+{
+	uint8_t cw[256];
+	size_t n = 0, code = 0;
+	if (f->n < 1 || (f->kind != UT_KIND_SINGLE && f->kind != UT_KIND_PART)) return UT_ERR_ARG;
 	for (size_t i = 1; i < NTYPES; i++)
-		if (!strcmp(UR_TYPES[i], u.type)) code = i;
-	cw[n++] = (uint8_t)(FORMAT_VERSION << 4 | u.kind);
+		if (!strcmp(UR_TYPES[i], f->type)) code = i;
+	cw[n++] = (uint8_t)(FORMAT_VERSION << 4 | f->kind);
 	cw[n++] = (uint8_t)code;
-	cw[n++] = (uint8_t)u.n;
+	cw[n++] = f->n;
 	if (!code) {
-		size_t tl = strlen(u.type);
+		size_t tl = strlen(f->type);
 		if (n + 1 + tl > 255) return UT_ERR_TOO_LONG;
 		cw[n++] = (uint8_t)tl;
-		memcpy(cw + n, u.type, tl); n += tl;
+		memcpy(cw + n, f->type, tl); n += tl;
 	}
-	if (n + u.n + UT_PARITY > 255) return UT_ERR_TOO_LONG;
-	memcpy(cw + n, u.body, u.n); n += u.n;
+	if (n + f->n + UT_PARITY > 255) return UT_ERR_TOO_LONG;
+	memcpy(cw + n, f->body, f->n); n += f->n;
 	/* a byte of padding when the base-15 digits would leave 8 bits or more spare */
 	size_t total = n + UT_PARITY;
 	if (15 * ((8 * total + 14) / 15) - 8 * total >= 8) {
@@ -593,11 +609,19 @@ int32_t ut_ur_to_frame(const char *ur, char *tones, size_t cap)
 	n += UT_PARITY;
 	if (cap < 5) return UT_ERR_SPACE;
 	memcpy(tones, LEAD, 2); memcpy(tones + 2, SYNC, 2);
-	r = to_tones(cw, n, SYNC[1], tones + 4, cap - 4);
+	int r = to_tones(cw, n, SYNC[1], tones + 4, cap - 4);
 	return r < 0 ? r : r + 4;
 }
 
-static int frame_body(const char *tones, size_t len, char *ur, size_t cap, int *corrected)
+int32_t ut_ur_to_frame(const char *ur, char *tones, size_t cap)
+{
+	ut_frame f;
+	int32_t r = ut_frame_from_ur(ur, &f);
+	return r < 0 ? r : ut_frame_encode(&f, tones, cap);
+}
+
+/* the codeword after the sync, checked: Reed-Solomon, header, a part's sequence */
+static int frame_body(const char *tones, size_t len, ut_frame *f, int *corrected)
 {
 	uint8_t cw[300];
 	int n = from_tones(tones, len, SYNC[1], cw, sizeof cw);
@@ -608,24 +632,27 @@ static int frame_body(const char *tones, size_t len, char *ur, size_t cap, int *
 	size_t dlen = (size_t)n - UT_PARITY, i = 3;
 	int version = cw[0] >> 4, kind = cw[0] & 15;
 	if (version != FORMAT_VERSION || (kind != KIND_SINGLE && kind != KIND_PART)) return UT_ERR_DECODE;
-	char type[256];
 	if (cw[1] == 0) {
 		size_t tl = cw[3];
-		if (4 + tl > dlen) return UT_ERR_DECODE;
-		memcpy(type, cw + 4, tl); type[tl] = 0;
+		if (4 + tl > dlen || tl > UT_MAX_TYPE) return UT_ERR_DECODE;
+		memcpy(f->type, cw + 4, tl); f->type[tl] = 0;
 		i = 4 + tl;
 	} else if (cw[1] < NTYPES)
-		strcpy(type, UR_TYPES[cw[1]]);
+		strcpy(f->type, UR_TYPES[cw[1]]);
 	else
 		return UT_ERR_DECODE;
 	size_t blen = cw[2];
 	if (i + blen > dlen || dlen - i - blen > 1 || (dlen - i - blen == 1 && cw[i + blen])) return UT_ERR_DECODE;
-	int r = ur_text(type, kind, cw + i, blen, ur, cap);
-	if (r >= 0 && corrected) *corrected = fixed;
-	return r < 0 ? (r == UT_ERR_SPACE ? r : UT_ERR_DECODE) : r;
+	uint32_t seq, count;
+	if (kind == KIND_PART && part_sequence(cw + i, blen, &seq, &count)) return UT_ERR_DECODE;
+	f->kind = (uint8_t)kind;
+	memcpy(f->body, cw + i, blen);
+	f->n = (uint8_t)blen;
+	if (corrected) *corrected = fixed;
+	return (int)blen;
 }
 
-int32_t ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected)
+int32_t ut_frame_decode(const char *tones, ut_frame *f, int *corrected)
 {
 	size_t len = strlen(tones), starts[4], ns = 0;
 	int err = UT_ERR_SYNC;
@@ -637,8 +664,8 @@ int32_t ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected)
 		const char *data = tones + starts[s];
 		size_t dl = len - starts[s];
 		if (dl > UT_MAX_FRAME) return UT_ERR_DECODE;
-		int r = frame_body(data, dl, ur, cap, corrected);
-		if (r >= 0 || r == UT_ERR_SPACE) return r;
+		int r = frame_body(data, dl, f, corrected);
+		if (r >= 0) return r;
 		err = r;
 		/* one extra or one lost tone (the count tells which): drop or add one
 		 * every third place; once the groups line up again, Reed-Solomon
@@ -653,11 +680,22 @@ int32_t ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected)
 					if (KEYS[k] != data[i - 1] && KEYS[k] != data[i]) fill = KEYS[k];
 				memcpy(cand, data, i); cand[i] = fill; memcpy(cand + i + 1, data + i, dl - i); cl = dl + 1;
 			}
-			r = frame_body(cand, cl, ur, cap, corrected);
-			if (r >= 0 || r == UT_ERR_SPACE) return r;
+			r = frame_body(cand, cl, f, corrected);
+			if (r >= 0) return r;
 		}
 	}
 	return err;
+}
+
+int32_t ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected)
+{
+	ut_frame f;
+	int fixed = 0;
+	int32_t r = ut_frame_decode(tones, &f, &fixed);
+	if (r < 0) return r;
+	r = ut_frame_ur(&f, ur, cap);
+	if (r >= 0 && corrected) *corrected = fixed;
+	return r;
 }
 
 /* ---- seeds ---------------------------------------------------------------------- */
