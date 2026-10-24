@@ -116,9 +116,10 @@ def listen(lib, pcm, rate, chunk=1024):
     l = ctypes.create_string_buffer(STRUCT)
     lib.ut_listener_init(l, rate)
     groups, out = [], ctypes.create_string_buffer(700)
+    arr = (ctypes.c_int16 * max(1, len(pcm)))(*pcm)
     for i in range(0, len(pcm), chunk):
-        part = (ctypes.c_int16 * len(pcm[i:i + chunk]))(*pcm[i:i + chunk])
-        lib.ut_listener_push(l, part, len(part))
+        part = ctypes.cast(ctypes.byref(arr, 2 * i), ctypes.POINTER(ctypes.c_int16))
+        lib.ut_listener_push(l, part, min(chunk, len(pcm) - i))
         while lib.ut_listener_group(l, out, 700) > 0:
             groups.append(out.value.decode())
     lib.ut_listener_flush(l)
@@ -260,12 +261,136 @@ def test_detector():
     check(heard == frame, "detections follow the frame's keys")
 
 
+# ---- layer 2: keys, from detections ---------------------------------------------
+
+def build_old():
+    """The library as it was before the layers (commit 148c6f7): the oracle."""
+    old = ROOT / "build" / "old"
+    old.mkdir(parents=True, exist_ok=True)
+    for f in ("ur_tones.c", "ur_tones.h"):
+        (old / f).write_bytes(subprocess.run(["git", "show", "148c6f7:c/" + f], cwd=ROOT, capture_output=True,
+                                             check=True).stdout)
+    return build("ut_old", src=old / "ur_tones.c")
+
+
+def declare_keys(lib):
+    lib.ut_keys_init.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32]
+    lib.ut_keys_detection.argtypes = [ctypes.c_void_p, ctypes.c_char, ctypes.c_int16]
+    lib.ut_keys_flush.argtypes = [ctypes.c_void_p]
+    lib.ut_keys_group.argtypes = [ctypes.c_void_p, c_char_p, c_size_t]
+    lib.ut_keys_live.argtypes = [ctypes.c_void_p, c_char_p, c_size_t]
+
+
+def take_groups(lib, k):
+    out, groups = ctypes.create_string_buffer(700), []
+    while lib.ut_keys_group(k, out, 700) > 0:
+        groups.append(out.value.decode())
+    return groups
+
+
+def py_groups(tones, hop_ms):
+    """Groups from (key, start, end) tones, as the reference's listen() makes them."""
+    groups, current, last_end = [], "", None
+
+    def keypad():
+        return current[:1] == "*" and (len(current) == 1 or current[1:].isdigit())
+
+    def close():
+        g = current
+        if not keypad() and not g.startswith("*"):
+            g = "".join(k for i, k in enumerate(g) if i == 0 or k != g[i - 1])
+        groups.append(g)
+
+    for key, start, end in tones:
+        if current and last_end is not None and (start - last_end) * hop_ms > 225 and not keypad():
+            close()
+            current = ""
+        if keypad() and key not in "0123456789#":
+            close()
+            current = ""
+        current += key
+        last_end = end
+        if current[:1] == "*" and key == "#" and current[1:-1].isdigit():
+            close()
+            current = ""
+    if current:
+        close()
+    return groups
+
+
+def random_detections(rng, n):
+    """Keys with flicker, glitches, dips and echoes, and no silence of 300 ms."""
+    out = []
+    while len(out) < n:
+        key = rng.choice(list(st.KEYS) + [None] * 4)
+        run = rng.randint(1, 12)
+        level = rng.randint(-40, -10)
+        for i in range(run):
+            if key is not None and rng.random() < 0.15:
+                level -= rng.choice((3, 9, 12))        # a dip, or an echo's weaker tail
+            elif key is not None and rng.random() < 0.1:
+                level += rng.choice((7, 9))            # pressed again
+            out.append((key, level) if key is not None else (None, -99))
+        if key is None and run > 25:
+            out = out[:-(run - 25)]
+    return out[:n]
+
+
+def test_keys_from_detections():
+    import random
+    lib = build("ut_layers")
+    declare_keys(lib)
+    old = build_old()
+    # the segmenter and grouper against the reference, detection by detection
+    rng = random.Random(7)
+    k = ctypes.create_string_buffer(STRUCT)
+    bad = 0
+    for trial in range(200):
+        dets = random_detections(rng, rng.randint(20, 400))
+        lib.ut_keys_init(k, 80, 8000)
+        groups = []
+        for key, level in dets:
+            lib.ut_keys_detection(k, (key or "\0").encode(), 10 * level)
+            groups += take_groups(lib, k)
+        lib.ut_keys_flush(k)
+        groups += take_groups(lib, k)
+        want = py_groups(st.segment([(key, float(level)) for key, level in dets]), 10.0)
+        bad += groups != want
+    check(not bad, "segmenter and grouper = the reference's (%d of 200 differ)" % bad)
+    # the same groups as before, through the whole receiver, at many rates, through a room
+    import acoustic
+    vec_frames, seeds = some_frames(2), [v["keypad"] for v in VECTORS if "keypad" in v][:2]
+    for rate in (8000, 11025, 22050, 44100, 48000, 96000):
+        for seed in range(2):
+            r = random.Random(rate + seed)
+            groups = [r.choice(vec_frames)[:r.randint(40, 120)], r.choice(seeds),
+                      "".join(r.choice(st.KEYS) for _ in range(r.randint(5, 40)))]
+            pcm = render(lib, groups, rate, 80, 80, 600)
+            room = acoustic.channel([v / 32768 for v in pcm], rate, r, speaker_fc=600, rt60=0.4, wet=0.6, noise=0.02)
+            pcm = [max(-32767, min(32767, round(v * 32767))) for v in room]
+            check(listen(lib, pcm, rate) == listen(old, pcm, rate), "same groups as before at %d Hz (%d)" % (rate, seed))
+    # chunking changes nothing
+    pcm = render(lib, some_frames(1), 8000)[:40000]
+    whole = listen(lib, pcm, 8000, 4096)
+    check(listen(lib, pcm, 8000, 1) == whole and listen(lib, pcm, 8000, 7) == whole, "chunks of 1, 7, 4096 samples")
+    # a long group, no silence: one group, truncated at UT_GROUP (600)
+    keys = "".join("0123456789"[i % 10] for i in range(1700))
+    heard = listen(lib, render(lib, [keys], 8000, 40, 20, 400), 8000, 4096)
+    check(heard == [keys[:600]], "100 s without a silence: one group of 600 tones (%s)" % [len(g) for g in heard])
+    # the listener's size
+    exe = ROOT / "build" / "sizes"
+    subprocess.run(["cc", "-std=c99", "-I", str(ROOT / "c"), str(ROOT / "tests" / "c" / "sizes.c"), "-o", str(exe)], check=True)
+    sizes = dict(l.split() for l in subprocess.run([str(exe)], capture_output=True, text=True, check=True).stdout.splitlines())
+    check(int(sizes["ut_listener"]) < 6144, "ut_listener under 6 KB: %s" % sizes["ut_listener"])
+
+
 def main():
     test_config()
     test_globals()
     test_unsigned_char()
     test_int32_results()
     test_detector()
+    test_keys_from_detections()
     print("%s: %d checks, %d failures" % ("ok" if not failures else "FAIL", checks, failures))
     sys.exit(1 if failures else 0)
 

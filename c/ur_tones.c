@@ -1563,29 +1563,26 @@ size_t ut_detector_push(ut_detector *d, const int16_t *x, size_t n, size_t *used
 	return k;
 }
 
-/* ---- listening: detections to groups ---------------------------------------- */
+/* ---- layer 2: detections to groups --------------------------------------------- */
 
-void ut_listener_init(ut_listener *l, uint32_t rate)
+void ut_keys_init(ut_keys *k, uint32_t tick_num, uint32_t tick_den)
 {
-	memset(l, 0, sizeof *l);
-	ut_detector_init(&l->det, rate);
-	l->last_end = -1;
-	l->level = -990;
+	memset(k, 0, sizeof *k);
+	k->num = tick_num;
+	k->den = tick_den;
 }
 
-/* a key lasting fewer than min_hops from i: a glitch */
-static int short_run(const ut_listener *l, uint32_t i, char k, uint32_t min_hops)
+/* t ticks last more than ms milliseconds */
+static int longer(const ut_keys *k, uint32_t t, uint32_t ms)
 {
-	uint32_t m = 0;
-	while (i + m < l->ndet && l->dets[i + m].key == k && m < min_hops) m++;
-	return m < min_hops;
+	return (uint64_t)t * k->num * 1000 > (uint64_t)ms * k->den;
 }
 
-static void group_close(ut_listener *l)
+static void group_close(ut_keys *k)
 {
-	char *g = l->current;
-	uint32_t n = l->clen;
-	l->clen = 0;
+	char *g = k->current;
+	uint32_t n = k->clen;
+	k->clen = 0;
 	if (!n) return;
 	if (g[0] != '*') {          /* in a data frame a tone never follows itself: a repeat is an echo */
 		uint32_t w = 1;
@@ -1593,115 +1590,170 @@ static void group_close(ut_listener *l)
 			if (g[i] != g[w - 1]) g[w++] = g[i];
 		n = w;
 	}
-	if (l->rcount == UT_READY) {          /* drop the oldest */
-		l->rhead = (l->rhead + 1) % UT_READY;
-		l->rcount--;
+	if (k->rcount == UT_READY) {          /* drop the oldest */
+		k->rhead = (k->rhead + 1) % UT_READY;
+		k->rcount--;
 	}
-	char *dst = l->ready[(l->rhead + l->rcount) % UT_READY];
+	char *dst = k->ready[(k->rhead + k->rcount) % UT_READY];
 	memcpy(dst, g, n);
 	dst[n] = 0;
-	l->rcount++;
+	k->rcount++;
 }
 
-static int keypad_open(const ut_listener *l)
+static int keypad_open(const ut_keys *k)
 {
-	if (!l->clen || l->current[0] != '*') return 0;
-	for (uint32_t i = 1; i < l->clen; i++)
-		if (l->current[i] < '0' || l->current[i] > '9') return 0;
+	if (!k->clen || k->current[0] != '*') return 0;
+	for (uint32_t i = 1; i < k->clen; i++)
+		if (k->current[i] < '0' || k->current[i] > '9') return 0;
 	return 1;
 }
 
-static void tone(ut_listener *l, char key, int64_t start, int64_t end)
+/* a tone from start to end (ticks) */
+static void tone(ut_keys *k, char key, uint32_t start, uint32_t end)
 {
-	/* (start - last_end) hops of hop*dec/rate s: more than 225 ms? */
-	int long_pause = l->last_end >= 0 && (uint64_t)(start - l->last_end) * l->det.hop * l->det.dec * 1000 > (uint64_t)225 * l->det.rate;
-	if (l->clen && long_pause && !keypad_open(l)) group_close(l);
-	if (keypad_open(l) && !((key >= '0' && key <= '9') || key == '#')) group_close(l);
-	if (l->clen < UT_GROUP) l->current[l->clen++] = key;
-	l->last_end = end;
-	if (key == '#' && l->current[0] == '*' && l->clen > 2) {
+	int long_pause = k->have_end && longer(k, start - k->last_end, 225);
+	if (k->clen && long_pause && !keypad_open(k)) group_close(k);
+	if (keypad_open(k) && !((key >= '0' && key <= '9') || key == '#')) group_close(k);
+	if (k->clen < UT_GROUP) k->current[k->clen++] = key;
+	k->last_end = end;
+	k->have_end = 1;
+	if (key == '#' && k->current[0] == '*' && k->clen > 2) {
 		int digits = 1;
-		for (uint32_t i = 1; i + 1 < l->clen; i++)
-			if (l->current[i] < '0' || l->current[i] > '9') digits = 0;
-		if (digits) group_close(l);
+		for (uint32_t i = 1; i + 1 < k->clen; i++)
+			if (k->current[i] < '0' || k->current[i] > '9') digits = 0;
+		if (digits) group_close(k);
 	}
 }
 
-/* as ur_tones.segment(): tones of 30 ms or more; flicker bridged; the same key
- * again is a new tone only if it comes back nearly as loud (an echo is weaker) */
-static void segment(ut_listener *l)
+/* As ur_tones.segment(): tones of 30 ms or more; flicker bridged; the same key
+ * again is a new tone only if it comes back nearly as loud (an echo is weaker).
+ * Detections wait in `look` until the two after them have come (a glitch is
+ * a key lasting fewer than 3), or the input pauses. */
+#define MIN_HOPS 3
+#define BRIDGE_HOPS 3
+#define DIP 80                  /* 8 dB */
+#define NEAR 60                 /* 6 dB */
+
+static void seg_close(ut_keys *k)
 {
-	const uint32_t min_hops = 3, bridge_hops = 3;
-	const int dip = 80, near = 60;           /* 8 dB, 6 dB */
-	char cur_key = 0, last_key = 0, prev_key = 0;
-	int64_t cur_start = 0, cur_end = 0, prev_start = 0, prev_end = 0;
-	int cur_peak = 0, last_peak = 0, dipped = 0, have_cur = 0, have_prev = 0;
-	uint32_t gap = 0;
+	if (!k->have_cur || k->cur_end - k->cur_start < MIN_HOPS) return;
+	if (k->last_key && k->last_key == k->cur_key && k->cur_peak < k->last_peak - NEAR && k->have_prev && k->prev_key == k->cur_key) {
+		k->prev_end = k->cur_end;       /* an echo of it */
+		return;
+	}
+	if (k->have_prev) tone(k, k->prev_key, k->prev_start, k->prev_end);
+	k->prev_key = k->cur_key; k->prev_start = k->cur_start; k->prev_end = k->cur_end; k->have_prev = 1;
+	k->last_key = k->cur_key; k->last_peak = k->cur_peak;
+}
 
-#define CLOSE() do { \
-		if (have_cur && cur_end - cur_start >= (int64_t)min_hops) { \
-			if (last_key && last_key == cur_key && cur_peak < last_peak - near && have_prev && prev_key == cur_key) \
-				prev_end = cur_end; \
-			else { \
-				if (have_prev) tone(l, prev_key, l->offset + prev_start, l->offset + prev_end); \
-				prev_key = cur_key; prev_start = cur_start; prev_end = cur_end; have_prev = 1; \
-				last_key = cur_key; last_peak = cur_peak; \
-			} \
-		} \
-	} while (0)
+static void seg_start(ut_keys *k, char key, uint32_t i, int lvl)
+{
+	k->cur_key = key; k->cur_start = i; k->cur_end = i + 1; k->cur_peak = lvl; k->dipped = 0; k->have_cur = 1;
+}
 
-	for (uint32_t i = 0; i < l->ndet; i++) {
-		char k = l->dets[i].key;
-		int lvl = l->dets[i].level;
-		if (have_cur && k && k == cur_key && gap <= bridge_hops) {
-			if (dipped && lvl > cur_peak - near) {
-				CLOSE();
-				cur_key = k; cur_start = i; cur_end = i + 1; cur_peak = lvl; dipped = 0;
-			} else {
-				cur_end = i + 1;
-				if (!dipped && lvl > cur_peak) cur_peak = lvl;
-				if (lvl < cur_peak - dip) dipped = 1;
-			}
-			gap = 0;
-		} else if (!k || (have_cur && gap <= bridge_hops && k != cur_key && short_run(l, i, k, min_hops))) {
-			gap++;
-			if (have_cur && gap > bridge_hops) { CLOSE(); have_cur = 0; }
+/* the oldest detection waiting, with what follows it in `look` */
+static void seg_step(ut_keys *k)
+{
+	char key = k->look[0].key;
+	int lvl = k->look[0].level;
+	uint32_t i = k->at;
+	if (k->have_cur && key && key == k->cur_key && k->gap <= BRIDGE_HOPS) {
+		if (k->dipped && lvl > k->cur_peak - NEAR) {      /* pressed again */
+			seg_close(k);
+			seg_start(k, key, i, lvl);
 		} else {
-			CLOSE();
-			cur_key = k; cur_start = i; cur_end = i + 1; cur_peak = lvl; dipped = 0; have_cur = 1;
-			gap = 0;
+			k->cur_end = i + 1;
+			if (!k->dipped && lvl > k->cur_peak) k->cur_peak = lvl;
+			if (lvl < k->cur_peak - DIP) k->dipped = 1;
+		}
+		k->gap = 0;
+	} else {
+		uint32_t m = 0;
+		while (m < k->nlook && k->look[m].key == key && m < MIN_HOPS) m++;
+		if (!key || (k->have_cur && k->gap <= BRIDGE_HOPS && key != k->cur_key && m < MIN_HOPS)) {
+			k->gap++;
+			if (k->have_cur && k->gap > BRIDGE_HOPS) { seg_close(k); k->have_cur = 0; }
+		} else {
+			seg_close(k);
+			seg_start(k, key, i, lvl);
+			k->gap = 0;
 		}
 	}
-	CLOSE();
-	if (have_prev) tone(l, prev_key, l->offset + prev_start, l->offset + prev_end);
-#undef CLOSE
+	k->at++;
+	k->nlook--;
+	memmove(k->look, k->look + 1, k->nlook * sizeof k->look[0]);
 }
 
-static void batch(ut_listener *l)
+/* the input pauses: what waits is decided, the last tone goes out */
+static void seg_cut(ut_keys *k)
 {
-	segment(l);
-	l->offset += l->ndet;
-	l->ndet = 0;
-	l->silent = 0;
-	if (!keypad_open(l)) group_close(l);
+	while (k->nlook) seg_step(k);
+	seg_close(k);
+	if (k->have_prev) tone(k, k->prev_key, k->prev_start, k->prev_end);
+	k->have_cur = k->have_prev = 0;
+	k->last_key = 0;
+	k->gap = 0;
+	k->since = 0;
+	k->silent = 0;
 }
 
-static void step(ut_listener *l, char k, int16_t lvl)
+void ut_keys_detection(ut_keys *k, char key, int16_t level)
 {
-	l->level = lvl;
-	if (l->ndet == UT_MAX_DETS) batch(l);           /* a very long group: cut it */
-	l->dets[l->ndet].key = k;
-	l->dets[l->ndet].level = lvl;
-	l->ndet++;
-	if (k == l->live_key) {
-		if (++l->live_run == 3 && k && l->nlive < UT_LIVE) l->live[l->nlive++] = k;
+	if (key == k->live_key) {
+		if (++k->live_run == 3 && key && k->nlive < UT_LIVE) k->live[k->nlive++] = key;
 	} else {
-		l->live_key = k;
-		l->live_run = 1;
+		k->live_key = key;
+		k->live_run = 1;
 	}
-	l->silent = k ? 0 : l->silent + 1;
-	/* 300 ms of silence: segment what came before */
-	if ((uint64_t)l->silent * l->det.hop * l->det.dec * 1000 >= (uint64_t)300 * l->det.rate && l->ndet > l->silent) batch(l);
+	k->look[k->nlook].key = key;
+	k->look[k->nlook].level = level;
+	k->nlook++;
+	k->since++;
+	k->silent = key ? 0 : k->silent + 1;
+	if (k->nlook == MIN_HOPS) seg_step(k);
+	/* 300 ms of silence after something: segment what came before */
+	if ((uint64_t)k->silent * k->num * 1000 >= (uint64_t)300 * k->den && k->since > k->silent) {
+		seg_cut(k);
+		if (!keypad_open(k)) group_close(k);
+	}
+}
+
+void ut_keys_flush(ut_keys *k)
+{
+	if (k->since) seg_cut(k);
+	group_close(k);
+}
+
+int32_t ut_keys_group(ut_keys *k, char *out, size_t cap)
+{
+	if (!k->rcount) return 0;
+	const char *g = k->ready[k->rhead];
+	size_t n = strlen(g);
+	if (n + 1 > cap) return UT_ERR_SPACE;
+	memcpy(out, g, n + 1);
+	k->rhead = (k->rhead + 1) % UT_READY;
+	k->rcount--;
+	return (int32_t)n;
+}
+
+int32_t ut_keys_live(ut_keys *k, char *out, size_t cap)
+{
+	size_t n = k->nlive < cap - 1 ? k->nlive : cap - 1;
+	memcpy(out, k->live, n);
+	out[n] = 0;
+	k->nlive = 0;
+	return (int32_t)n;
+}
+
+/* ---- listening: layers 1 and 2 together -------------------------------------- */
+
+void ut_listener_init(ut_listener *l, uint32_t rate)
+{
+	uint32_t num, den;
+	ut_detector_init(&l->det, rate);
+	ut_detector_tick(&l->det, &num, &den);
+	ut_keys_init(&l->keys, num, den);
+	l->level = -990;
 }
 
 void ut_listener_push(ut_listener *l, const int16_t *x, size_t n)
@@ -1709,35 +1761,15 @@ void ut_listener_push(ut_listener *l, const int16_t *x, size_t n)
 	ut_det d[8];
 	while (n) {
 		size_t used, k = ut_detector_push(&l->det, x, n, &used, d, 8);
-		for (size_t i = 0; i < k; i++) step(l, d[i].key, d[i].level);
+		for (size_t i = 0; i < k; i++) {
+			l->level = d[i].level;
+			ut_keys_detection(&l->keys, d[i].key, d[i].level);
+		}
 		x += used;
 		n -= used;
 	}
 }
 
-void ut_listener_flush(ut_listener *l)
-{
-	if (l->ndet) batch(l);
-	group_close(l);
-}
-
-int32_t ut_listener_group(ut_listener *l, char *out, size_t cap)
-{
-	if (!l->rcount) return 0;
-	const char *g = l->ready[l->rhead];
-	size_t n = strlen(g);
-	if (n + 1 > cap) return UT_ERR_SPACE;
-	memcpy(out, g, n + 1);
-	l->rhead = (l->rhead + 1) % UT_READY;
-	l->rcount--;
-	return (int32_t)n;
-}
-
-int32_t ut_listener_live(ut_listener *l, char *out, size_t cap)
-{
-	size_t n = l->nlive < cap - 1 ? l->nlive : cap - 1;
-	memcpy(out, l->live, n);
-	out[n] = 0;
-	l->nlive = 0;
-	return (int32_t)n;
-}
+void ut_listener_flush(ut_listener *l) { ut_keys_flush(&l->keys); }
+int32_t ut_listener_group(ut_listener *l, char *out, size_t cap) { return ut_keys_group(&l->keys, out, cap); }
+int32_t ut_listener_live(ut_listener *l, char *out, size_t cap) { return ut_keys_live(&l->keys, out, cap); }

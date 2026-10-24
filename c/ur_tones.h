@@ -268,24 +268,54 @@ void ut_detector_tick(const ut_detector *d, uint32_t *num, uint32_t *den);
  * 1209-1633 Hz) and the window's energy (the sum of its samples squared). */
 void ut_classify(const int64_t power[8], uint64_t energy, uint32_t n, char *key, int16_t *level);
 
-/* ---- listening -------------------------------------------------------- */
+/* ---- layer 2 · detections to groups of keys (SPEC appendix A) ------------
+ * A tone is one key for at least 30 ms; a key that drops out for up to 30 ms
+ * is the same tone (flicker); the same key again is a new tone only if it
+ * comes back nearly as loud (an echo is weaker). Tones then make groups:
+ * split by silences over 225 ms, except keypad mode ("*", digits, "#"),
+ * which runs to its "#"; in a data frame a repeated key is an echo, dropped.
+ * Streaming: a few bytes of state, whatever the length of the input.
+ *
+ * Time goes in ticks of num / den seconds: a detector's (ut_detector_tick),
+ * or 1 / 1000 for milliseconds. */
 
-#define UT_MAX_DETS 8192      /* 10 ms detections kept between silences: 82 s */
+typedef struct {
+	uint32_t num, den;                  /* a tick lasts num / den s */
+	/* the segmenter */
+	ut_det look[3];                     /* detections waiting for the ones after them */
+	uint32_t nlook, at, since, silent;  /* at: the next detection's tick */
+	char cur_key, last_key, prev_key;
+	uint8_t have_cur, have_prev, dipped;
+	uint32_t cur_start, cur_end, prev_start, prev_end, gap;
+	int cur_peak, last_peak;
+	/* the grouper */
+	char current[UT_GROUP + 1];
+	uint32_t clen, last_end;
+	uint8_t have_end;
+	char ready[UT_READY][UT_GROUP + 1];
+	uint32_t rhead, rcount;
+	/* the live view */
+	char live_key;
+	uint32_t live_run, nlive;
+	char live[UT_LIVE];
+} ut_keys;
+
+void ut_keys_init(ut_keys *k, uint32_t tick_num, uint32_t tick_den);
+/* One detection per tick (ut_detector_push's, or one's own DSP's). */
+void ut_keys_detection(ut_keys *k, char key, int16_t level);
+/* At the end of the input: closes what is pending. */
+void ut_keys_flush(ut_keys *k);
+/* The next group of keys (a frame, or keypad mode), or 0 if none. */
+int32_t ut_keys_group(ut_keys *k, char *out, size_t cap);
+/* Keys since the last call, as they come (a rough, immediate view). */
+int32_t ut_keys_live(ut_keys *k, char *out, size_t cap);
+
+/* ---- listening: layers 1 and 2 together ---------------------------------- */
 
 typedef struct {
 	ut_detector det;
-	ut_det dets[UT_MAX_DETS];
-	uint32_t ndet, silent, offset;
-	char current[UT_GROUP + 1];
-	uint32_t clen;
-	int64_t last_end;                   /* hop of the last tone's end, or -1 */
-	char ready[UT_READY][UT_GROUP + 1];
-	uint32_t rhead, rcount;
-	char live_key;
-	uint32_t live_run;
-	char live[UT_LIVE];
-	uint32_t nlive;
-	int level;                          /* the last window's tone level, in 0.1 dBFS (-990: silence) */
+	ut_keys keys;
+	int level;                /* the last window's tone level, in 0.1 dBFS (-990: silence) */
 } ut_listener;
 
 void ut_listener_init(ut_listener *l, uint32_t rate);
