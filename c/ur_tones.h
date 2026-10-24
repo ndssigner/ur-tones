@@ -181,8 +181,9 @@ int ut_fountain_decoder_init(ut_fountain_decoder *d, uint8_t *work, size_t work_
 int ut_fountain_receive(ut_fountain_decoder *d, const char *ur);
 int ut_fountain_result(const ut_fountain_decoder *d, const char **type, const uint8_t **msg, size_t *len);
 /* The fragments a part carries, as bits of `set` ((seq_len + 7) / 8 bytes).
- * Exposed for tests (not reentrant: it keeps one table). */
-int ut_fountain_choose(uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set);
+ * Exposed for tests. `t` keeps the degree table for one seq_len: zero it
+ * before its first use. */
+int ut_fountain_choose(ut_sampler *t, uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set);
 
 /* ---- PSBTs: the CBOR of crypto-psbt and psbt (a byte string) ---------------- */
 int ut_psbt_to_cbor(const uint8_t *psbt, size_t len, uint8_t *out, size_t cap);

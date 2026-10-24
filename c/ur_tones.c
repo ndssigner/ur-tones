@@ -194,25 +194,62 @@ uint32_t ut_crc32(const uint8_t *data, size_t len)
 
 /* ---- Reed-Solomon over GF(256), as in QR codes --------------------------- */
 
-static uint8_t EXP[512], LOG[256];
-static int gf_ready;
+/* tools/gen_tables.py: the polynomial 0x11D; EXP doubled, so a product needs no modulo */
+static const uint8_t EXP[512] UT_ROM = {
+	1, 2, 4, 8, 16, 32, 64, 128, 29, 58, 116, 232, 205, 135, 19, 38,
+	76, 152, 45, 90, 180, 117, 234, 201, 143, 3, 6, 12, 24, 48, 96, 192,
+	157, 39, 78, 156, 37, 74, 148, 53, 106, 212, 181, 119, 238, 193, 159, 35,
+	70, 140, 5, 10, 20, 40, 80, 160, 93, 186, 105, 210, 185, 111, 222, 161,
+	95, 190, 97, 194, 153, 47, 94, 188, 101, 202, 137, 15, 30, 60, 120, 240,
+	253, 231, 211, 187, 107, 214, 177, 127, 254, 225, 223, 163, 91, 182, 113, 226,
+	217, 175, 67, 134, 17, 34, 68, 136, 13, 26, 52, 104, 208, 189, 103, 206,
+	129, 31, 62, 124, 248, 237, 199, 147, 59, 118, 236, 197, 151, 51, 102, 204,
+	133, 23, 46, 92, 184, 109, 218, 169, 79, 158, 33, 66, 132, 21, 42, 84,
+	168, 77, 154, 41, 82, 164, 85, 170, 73, 146, 57, 114, 228, 213, 183, 115,
+	230, 209, 191, 99, 198, 145, 63, 126, 252, 229, 215, 179, 123, 246, 241, 255,
+	227, 219, 171, 75, 150, 49, 98, 196, 149, 55, 110, 220, 165, 87, 174, 65,
+	130, 25, 50, 100, 200, 141, 7, 14, 28, 56, 112, 224, 221, 167, 83, 166,
+	81, 162, 89, 178, 121, 242, 249, 239, 195, 155, 43, 86, 172, 69, 138, 9,
+	18, 36, 72, 144, 61, 122, 244, 245, 247, 243, 251, 235, 203, 139, 11, 22,
+	44, 88, 176, 125, 250, 233, 207, 131, 27, 54, 108, 216, 173, 71, 142, 1,
+	2, 4, 8, 16, 32, 64, 128, 29, 58, 116, 232, 205, 135, 19, 38, 76,
+	152, 45, 90, 180, 117, 234, 201, 143, 3, 6, 12, 24, 48, 96, 192, 157,
+	39, 78, 156, 37, 74, 148, 53, 106, 212, 181, 119, 238, 193, 159, 35, 70,
+	140, 5, 10, 20, 40, 80, 160, 93, 186, 105, 210, 185, 111, 222, 161, 95,
+	190, 97, 194, 153, 47, 94, 188, 101, 202, 137, 15, 30, 60, 120, 240, 253,
+	231, 211, 187, 107, 214, 177, 127, 254, 225, 223, 163, 91, 182, 113, 226, 217,
+	175, 67, 134, 17, 34, 68, 136, 13, 26, 52, 104, 208, 189, 103, 206, 129,
+	31, 62, 124, 248, 237, 199, 147, 59, 118, 236, 197, 151, 51, 102, 204, 133,
+	23, 46, 92, 184, 109, 218, 169, 79, 158, 33, 66, 132, 21, 42, 84, 168,
+	77, 154, 41, 82, 164, 85, 170, 73, 146, 57, 114, 228, 213, 183, 115, 230,
+	209, 191, 99, 198, 145, 63, 126, 252, 229, 215, 179, 123, 246, 241, 255, 227,
+	219, 171, 75, 150, 49, 98, 196, 149, 55, 110, 220, 165, 87, 174, 65, 130,
+	25, 50, 100, 200, 141, 7, 14, 28, 56, 112, 224, 221, 167, 83, 166, 81,
+	162, 89, 178, 121, 242, 249, 239, 195, 155, 43, 86, 172, 69, 138, 9, 18,
+	36, 72, 144, 61, 122, 244, 245, 247, 243, 251, 235, 203, 139, 11, 22, 44,
+	88, 176, 125, 250, 233, 207, 131, 27, 54, 108, 216, 173, 71, 142, 1, 2};
+static const uint8_t LOG[256] UT_ROM = {
+	0, 0, 1, 25, 2, 50, 26, 198, 3, 223, 51, 238, 27, 104, 199, 75,
+	4, 100, 224, 14, 52, 141, 239, 129, 28, 193, 105, 248, 200, 8, 76, 113,
+	5, 138, 101, 47, 225, 36, 15, 33, 53, 147, 142, 218, 240, 18, 130, 69,
+	29, 181, 194, 125, 106, 39, 249, 185, 201, 154, 9, 120, 77, 228, 114, 166,
+	6, 191, 139, 98, 102, 221, 48, 253, 226, 152, 37, 179, 16, 145, 34, 136,
+	54, 208, 148, 206, 143, 150, 219, 189, 241, 210, 19, 92, 131, 56, 70, 64,
+	30, 66, 182, 163, 195, 72, 126, 110, 107, 58, 40, 84, 250, 133, 186, 61,
+	202, 94, 155, 159, 10, 21, 121, 43, 78, 212, 229, 172, 115, 243, 167, 87,
+	7, 112, 192, 247, 140, 128, 99, 13, 103, 74, 222, 237, 49, 197, 254, 24,
+	227, 165, 153, 119, 38, 184, 180, 124, 17, 68, 146, 217, 35, 32, 137, 46,
+	55, 63, 209, 91, 149, 188, 207, 205, 144, 135, 151, 178, 220, 252, 190, 97,
+	242, 86, 211, 171, 20, 42, 93, 158, 132, 60, 57, 83, 71, 109, 65, 162,
+	31, 45, 67, 216, 183, 123, 164, 118, 196, 23, 73, 236, 127, 12, 111, 246,
+	108, 161, 59, 82, 41, 157, 85, 170, 251, 96, 134, 177, 187, 204, 62, 90,
+	203, 89, 95, 176, 156, 169, 160, 81, 11, 245, 22, 235, 122, 117, 44, 215,
+	79, 174, 213, 233, 230, 231, 173, 232, 116, 214, 244, 234, 168, 80, 88, 175};
 
-static void gf_init(void)
-{
-	if (gf_ready)
-		return;
-	unsigned x = 1;
-	for (int i = 0; i < 255; i++) {
-		EXP[i] = (uint8_t)x; LOG[x] = (uint8_t)i;
-		x <<= 1;
-		if (x & 0x100) x ^= 0x11D;
-	}
-	for (int i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
-	gf_ready = 1;
-}
-
-static uint8_t gmul(uint8_t a, uint8_t b) { return (a && b) ? EXP[LOG[a] + LOG[b]] : 0; }
-static uint8_t gdiv(uint8_t a, uint8_t b) { return a ? EXP[(LOG[a] + 255 - LOG[b]) % 255] : 0; }
+#define GF_EXP(i) UT_ROM_U8(&EXP[i])
+#define GF_LOG(i) UT_ROM_U8(&LOG[i])
+static uint8_t gmul(uint8_t a, uint8_t b) { return (a && b) ? GF_EXP(GF_LOG(a) + GF_LOG(b)) : 0; }
+static uint8_t gdiv(uint8_t a, uint8_t b) { return a ? GF_EXP((GF_LOG(a) + 255 - GF_LOG(b)) % 255) : 0; }
 
 /* p[0] is the highest degree coefficient */
 static uint8_t poly_eval(const uint8_t *p, size_t n, uint8_t x)
@@ -225,9 +262,8 @@ static uint8_t poly_eval(const uint8_t *p, size_t n, uint8_t x)
 void ut_rs_encode(const uint8_t *data, size_t n, size_t nsym, uint8_t *parity)
 {
 	uint8_t g[UT_PARITY + 1] = {1}, rem[UT_PARITY];
-	gf_init();
 	for (size_t i = 0; i < nsym; i++) {          /* product of (x - alpha^i) */
-		for (size_t j = i + 1; j > 0; j--) g[j] = g[j] ^ gmul(g[j - 1], EXP[i]);
+		for (size_t j = i + 1; j > 0; j--) g[j] = g[j] ^ gmul(g[j - 1], GF_EXP(i));
 	}
 	memset(rem, 0, nsym);
 	for (size_t i = 0; i < n; i++) {
@@ -247,11 +283,10 @@ int ut_rs_correct(uint8_t *cw, size_t n, size_t nsym)
 	size_t L = 0, m = 1, lamlen = 1, prevlen = 1;
 	uint8_t b = 1;
 	int any = 0, positions[UT_PARITY], npos = 0;
-	gf_init();
 	if (nsym > UT_PARITY || n > 255)
 		return UT_ERR_ARG;
 	for (size_t i = 0; i < nsym; i++) {
-		synd[i] = poly_eval(cw, n, EXP[i]);
+		synd[i] = poly_eval(cw, n, GF_EXP(i));
 		any |= synd[i];
 	}
 	if (!any)
@@ -281,7 +316,7 @@ int ut_rs_correct(uint8_t *cw, size_t n, size_t nsym)
 	/* Chien search: position p (from the end) is wrong if Lambda(alpha^-p) == 0 */
 	for (size_t j = 0; j <= L; j++) rev[j] = lam[L - j];
 	for (size_t p = 0; p < n; p++)
-		if (!poly_eval(rev, L + 1, EXP[(255 - p % 255) % 255])) {
+		if (!poly_eval(rev, L + 1, GF_EXP((255 - p % 255) % 255))) {
 			if (npos == (int)UT_PARITY) return UT_ERR_DECODE;
 			positions[npos++] = (int)p;
 		}
@@ -292,16 +327,16 @@ int ut_rs_correct(uint8_t *cw, size_t n, size_t nsym)
 		for (size_t j = 0; j <= L && i + j < nsym; j++) omega[i + j] ^= gmul(synd[i], lam[j]);
 	for (int q = 0; q < npos; q++) {
 		int p = positions[q];
-		uint8_t xinv = EXP[(255 - p % 255) % 255], num = 0, den = 0;
+		uint8_t xinv = GF_EXP((255 - p % 255) % 255), num = 0, den = 0;
 		for (size_t i = 0; i < nsym; i++)
-			num ^= gmul(omega[i], EXP[(LOG[xinv] * i) % 255]);
+			num ^= gmul(omega[i], GF_EXP((GF_LOG(xinv) * i) % 255));
 		for (size_t j = 1; j <= L; j += 2)
-			den ^= gmul(lam[j], EXP[(LOG[xinv] * (j - 1)) % 255]);
+			den ^= gmul(lam[j], GF_EXP((GF_LOG(xinv) * (j - 1)) % 255));
 		if (!den) return UT_ERR_DECODE;
-		cw[n - 1 - p] ^= gmul(EXP[p % 255], gdiv(num, den));
+		cw[n - 1 - p] ^= gmul(GF_EXP(p % 255), gdiv(num, den));
 	}
 	for (size_t i = 0; i < nsym; i++)
-		if (poly_eval(cw, n, EXP[i])) return UT_ERR_DECODE;
+		if (poly_eval(cw, n, GF_EXP(i))) return UT_ERR_DECODE;
 	return npos;
 }
 
@@ -894,11 +929,10 @@ static void choose(ut_sampler *t, uint32_t seq_num, uint32_t seq_len, uint32_t c
 	}
 }
 
-int ut_fountain_choose(uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set)
+int ut_fountain_choose(ut_sampler *t, uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set)
 {
-	static ut_sampler t;
-	if (!seq_num || !seq_len || seq_len > UT_MAX_PARTS) return UT_ERR_ARG;
-	choose(&t, seq_num, seq_len, checksum, set);
+	if (!t || !seq_num || !seq_len || seq_len > UT_MAX_PARTS) return UT_ERR_ARG;
+	choose(t, seq_num, seq_len, checksum, set);
 	return UT_OK;
 }
 

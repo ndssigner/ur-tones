@@ -45,7 +45,7 @@ def build(name, *flags):
                     str(ROOT / "c" / "ur_tones.c"), "-o", str(out)], check=True)
     lib = ctypes.CDLL(str(out))
     c_char_p, c_size_t, c_int, u8p, u32 = ctypes.c_char_p, ctypes.c_size_t, ctypes.c_int, ctypes.POINTER(ctypes.c_uint8), ctypes.c_uint32
-    lib.ut_fountain_choose.argtypes = [u32, u32, u32, u8p]
+    lib.ut_fountain_choose.argtypes = [ctypes.c_void_p, u32, u32, u32, u8p]
     lib.ut_fountain_encoder_init.argtypes = [ctypes.c_void_p, u8p, c_size_t, c_size_t]
     lib.ut_fountain_next_ur.argtypes = [ctypes.c_void_p, c_char_p, c_char_p, c_size_t]
     lib.ut_fountain_decoder_init.argtypes = [ctypes.c_void_p, u8p, c_size_t]
@@ -70,6 +70,7 @@ class XPub(ctypes.Structure):
 
 
 STRUCT = 64 * 1024  # bigger than the encoder's and decoder's structs; opaque here
+SAMPLER = ctypes.create_string_buffer(STRUCT)  # ut_fountain_choose's table, zeroed
 
 
 def buf(data):
@@ -131,7 +132,7 @@ def py_choose(seq_num, seq_len, checksum):
 
 def c_choose(lib, seq_num, seq_len, checksum):
     b = (ctypes.c_uint8 * ((seq_len + 7) // 8))()
-    assert lib.ut_fountain_choose(seq_num, seq_len, checksum, b) == 0
+    assert lib.ut_fountain_choose(SAMPLER, seq_num, seq_len, checksum, b) == 0
     return {i for i in range(seq_len) if b[i // 8] >> (i % 8) & 1}
 
 

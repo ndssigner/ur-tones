@@ -146,8 +146,32 @@ def test_config():
     check(frames_round_trip(lib), "placement macros: frames round trip")
 
 
+# ---- no mutable global state ------------------------------------------------
+
+def writable_symbols():
+    """Symbols the library's object file keeps in writable memory."""
+    obj = ROOT / "build" / "ur_tones.o"
+    subprocess.run([*CFLAGS, "-c", str(ROOT / "c" / "ur_tones.c"), "-o", str(obj)], check=True)
+    if sys.platform == "darwin":
+        out = subprocess.run(["nm", "-m", str(obj)], capture_output=True, text=True, check=True).stdout
+        return [l for l in out.splitlines() if any(s in l for s in ("(__DATA,__data)", "(__DATA,__bss)", "(__DATA,__common)"))]
+    out = subprocess.run(["nm", str(obj)], capture_output=True, text=True, check=True).stdout
+    return [l for l in out.splitlines() if len(l.split()) >= 2 and l.split()[-2] in "bBdDC"]
+
+
+def test_globals():
+    found = writable_symbols()
+    check(not found, "no writable globals: %s" % found)
+    sys.path.insert(0, str(ROOT / "tools"))
+    import gen_tables
+    exp, log = gen_tables.tables()
+    src = (ROOT / "c" / "ur_tones.c").read_text()
+    check(gen_tables.c_array("EXP", exp) + gen_tables.c_array("LOG", log) in src, "Reed-Solomon tables as generated")
+
+
 def main():
     test_config()
+    test_globals()
     print("%s: %d checks, %d failures" % ("ok" if not failures else "FAIL", checks, failures))
     sys.exit(1 if failures else 0)
 
