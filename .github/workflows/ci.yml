@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0    # tests/test_c_layers.py builds the library of 148c6f7 to compare with
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"

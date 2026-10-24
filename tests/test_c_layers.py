@@ -158,8 +158,16 @@ def writable_symbols():
     if sys.platform == "darwin":
         out = subprocess.run(["nm", "-m", str(obj)], capture_output=True, text=True, check=True).stdout
         return [l for l in out.splitlines() if any(s in l for s in ("(__DATA,__data)", "(__DATA,__bss)", "(__DATA,__common)"))]
-    out = subprocess.run(["nm", str(obj)], capture_output=True, text=True, check=True).stdout
-    return [l for l in out.splitlines() if len(l.split()) >= 2 and l.split()[-2] in "bBdDC"]
+    # ELF: by section; .data.rel.ro (tables of pointers in a PIE build) is read-only once relocated
+    out = subprocess.run(["objdump", "-t", str(obj)], capture_output=True, text=True, check=True).stdout
+    writable = []
+    for l in out.splitlines():
+        f = l.split()
+        sec = next((x for x in f if x.startswith(".") or x == "*COM*"), None)
+        if " O " in l and sec and (sec in (".data", ".bss", "*COM*") or
+                                   (sec.startswith((".data.", ".bss.")) and not sec.startswith(".data.rel.ro"))):
+            writable.append(l)
+    return writable
 
 
 def test_globals():
