@@ -235,18 +235,46 @@ void ut_synth_init(ut_synth *s, const char *tones, uint32_t rate,
 /* Writes up to n samples; returns how many (0: done). */
 size_t ut_synth_read(ut_synth *s, int16_t *out, size_t n);
 
+/* ---- layer 1 · samples to detections (SPEC appendix A) -------------------
+ * Every 10 ms, the eight DTMF frequencies over the last 25 ms (Goertzel, in
+ * integers, after bringing the rate down to about 8 kHz): one detection, a
+ * key or none, and the tone's level. A device with its own DSP (CMSIS-DSP,
+ * an FFT, a vector unit) can compute the eight powers itself and call
+ * ut_classify, so that every receiver decides the same way. */
+
+typedef struct {
+	char key;                 /* 0-9 A-D * #, or 0: none */
+	int16_t level;            /* the tone's level in 0.1 dBFS; -990: silence */
+} ut_det;
+
+typedef struct {
+	uint32_t rate, dec, srate, n, hop;
+	int32_t coeff[8];         /* cos(w), Q15 */
+	int32_t dec_sum;
+	uint32_t dec_count;
+	int16_t ring[UT_RING];
+	uint32_t total, next;     /* samples kept; start of the next window */
+	int level;                /* the last window's level, as ut_det's */
+} ut_detector;
+
+void ut_detector_init(ut_detector *d, uint32_t rate);
+/* Signed 16-bit mono samples in; detections out, up to `cap`. *used: how
+ * many samples it took (all of them unless `out` filled up first). */
+size_t ut_detector_push(ut_detector *d, const int16_t *x, size_t n, size_t *used, ut_det *out, size_t cap);
+/* How long a detection lasts, in seconds: num / den (for ut_keys_init). */
+void ut_detector_tick(const ut_detector *d, uint32_t *num, uint32_t *den);
+/* SPEC appendix A's decision, from the eight Goertzel powers |X|^2 of an
+ * n-sample window of 16-bit samples (low group 697-941 Hz, then high group
+ * 1209-1633 Hz) and the window's energy (the sum of its samples squared). */
+void ut_classify(const int64_t power[8], uint64_t energy, uint32_t n, char *key, int16_t *level);
+
 /* ---- listening -------------------------------------------------------- */
 
 #define UT_MAX_DETS 8192      /* 10 ms detections kept between silences: 82 s */
 
 typedef struct {
-	uint32_t rate, dec, srate, n, hop;
-	int32_t coeff[8];                   /* cos(w), Q15 */
-	int32_t dec_sum;
-	uint32_t dec_count;
-	int16_t ring[UT_RING];
-	uint32_t total, next;               /* samples seen; start of the next window */
-	struct { char key; int16_t level; } det[UT_MAX_DETS];
+	ut_detector det;
+	ut_det dets[UT_MAX_DETS];
 	uint32_t ndet, silent, offset;
 	char current[UT_GROUP + 1];
 	uint32_t clen;

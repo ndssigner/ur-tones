@@ -185,11 +185,87 @@ def test_int32_results():
     check(not bad, "int32_t results, not int: %s" % bad)
 
 
+# ---- layer 1: the detector -----------------------------------------------------
+
+class Det(ctypes.Structure):
+    _fields_ = [("key", ctypes.c_char), ("level", ctypes.c_int16)]
+
+
+def declare_detector(lib):
+    lib.ut_detector_init.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    lib.ut_detector_push.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int16), c_size_t,
+                                     ctypes.POINTER(c_size_t), ctypes.POINTER(Det), c_size_t]
+    lib.ut_detector_push.restype = c_size_t
+    lib.ut_detector_tick.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_uint32)]
+    lib.ut_classify.argtypes = [ctypes.POINTER(ctypes.c_int64), ctypes.c_uint64, ctypes.c_uint32,
+                                ctypes.c_char_p, ctypes.POINTER(ctypes.c_int16)]
+
+
+def goertzel_powers(x, rate):
+    """The eight |X|^2 with the C library's integer recurrence (cos in Q15)."""
+    import math
+    out = []
+    for f in st.LOW + st.HIGH:
+        c = round(math.cos(2 * math.pi * f / rate) * 32768)
+        s1 = s2 = 0
+        for v in x:
+            s1, s2 = v + ((2 * c * s1) >> 15) - s2, s1
+        out.append(s1 * s1 + s2 * s2 - ((2 * c * s1) >> 15) * s2)
+    return out
+
+
+def tone(f1, a1, f2, a2, rate=8000, n=200):
+    import math
+    return [round(a1 * math.sin(2 * math.pi * f1 * i / rate) + a2 * math.sin(2 * math.pi * f2 * i / rate)) for i in range(n)]
+
+
+def classify(lib, x):
+    p = (ctypes.c_int64 * 8)(*goertzel_powers(x, 8000))
+    key, level = ctypes.create_string_buffer(1), ctypes.c_int16(0)
+    lib.ut_classify(p, sum(v * v for v in x), len(x), key, ctypes.byref(level))
+    return key.raw[:1].replace(b"\0", b""), level.value
+
+
+def test_detector():
+    lib = build("ut_layers")
+    declare_detector(lib)
+    d = ctypes.create_string_buffer(STRUCT)
+    num, den = ctypes.c_uint32(), ctypes.c_uint32()
+    for rate, want in ((8000, (80, 8000)), (11025, (110, 11025)), (16000, (160, 16000)),
+                       (44100, (440, 44100)), (48000, (480, 48000)), (96000, (960, 96000))):
+        lib.ut_detector_init(d, rate)
+        lib.ut_detector_tick(d, ctypes.byref(num), ctypes.byref(den))
+        check((num.value, den.value) == want, "tick at %d Hz: %s" % (rate, (num.value, den.value)))
+    check(classify(lib, tone(770, 8000, 1336, 10000))[0] == b"5", "classify: key 5")
+    check(classify(lib, tone(770, 8, 1336, 10)) == (b"", -990), "classify: too quiet")
+    check(classify(lib, tone(770, 8000, 1336, 0))[0] == b"", "classify: low tone alone")
+    check(classify(lib, tone(770, 8000, 1336, 450))[0] == b"", "classify: 25 dB twist")
+    two_low = [a + b for a, b in zip(tone(697, 6000, 1336, 9000), tone(770, 6000, 1336, 0))]
+    check(classify(lib, two_low)[0] == b"", "classify: two low tones")
+    # the detector, in pieces: as many detections as windows, keys where the tones are
+    frame = some_frames(1)[0]
+    pcm = render(lib, [frame], 8000)
+    lib.ut_detector_init(d, 8000)
+    dets, used, out = [], c_size_t(), (Det * 4)()
+    arr = (ctypes.c_int16 * len(pcm))(*pcm)
+    i = 0
+    while i < len(pcm):
+        m = min(1000, len(pcm) - i)
+        at = ctypes.cast(ctypes.byref(arr, 2 * i), ctypes.POINTER(ctypes.c_int16))
+        k = lib.ut_detector_push(d, at, m, ctypes.byref(used), out, 4)
+        dets += [out[j].key.decode() if out[j].key != b"\0" else "" for j in range(k)]
+        i += used.value
+    check(len(dets) == (len(pcm) - 200) // 80 + 1, "one detection per hop: %d" % len(dets))
+    heard = "".join(k for i, k in enumerate(dets) if k and (i == 0 or dets[i - 1] != k))
+    check(heard == frame, "detections follow the frame's keys")
+
+
 def main():
     test_config()
     test_globals()
     test_unsigned_char()
     test_int32_results()
+    test_detector()
     print("%s: %d checks, %d failures" % ("ok" if not failures else "FAIL", checks, failures))
     sys.exit(1 if failures else 0)
 

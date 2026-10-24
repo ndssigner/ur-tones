@@ -1475,45 +1475,33 @@ UT_HOT size_t ut_synth_read(ut_synth *s, int16_t *out, size_t n)
 
 /* ---- listening (SPEC appendix A) ------------------------------------------------ */
 
-void ut_listener_init(ut_listener *l, uint32_t rate)
+void ut_detector_init(ut_detector *d, uint32_t rate)
 {
-	memset(l, 0, sizeof *l);
-	l->rate = rate;
-	l->dec = rate / 8000 ? rate / 8000 : 1;          /* down to about 8 kHz */
-	l->srate = rate / l->dec;
-	l->n = l->srate * 25 / 1000;                    /* 25 ms windows */
-	l->hop = l->srate * 10 / 1000;                  /* every 10 ms */
+	memset(d, 0, sizeof *d);
+	d->rate = rate;
+	d->dec = rate / 8000 ? rate / 8000 : 1;          /* down to about 8 kHz */
+	d->srate = rate / d->dec;
+	d->n = d->srate * 25 / 1000;                    /* 25 ms windows */
+	d->hop = d->srate * 10 / 1000;                  /* every 10 ms */
 	for (int i = 0; i < 8; i++) {
 		uint32_t f = i < 4 ? LOW[i] : HIGH[i - 4];
-		/* 2 cos(w) = 2 sin(w + pi/2), Q14 */
-		l->coeff[i] = isin(phase_inc(f, l->srate) + 0x40000000u);   /* cos(w), Q15 */
+		d->coeff[i] = isin(phase_inc(f, d->srate) + 0x40000000u);   /* cos(w), Q15 */
 	}
-	l->last_end = -1;
-	l->level = -990;
+	d->level = -990;
 }
 
-/* one 10 ms detection over the last 25 ms */
-static UT_HOT void detect(ut_listener *l, char *key, int16_t *level)
+void ut_detector_tick(const ut_detector *d, uint32_t *num, uint32_t *den)
 {
-	uint64_t total = 0;
-	int64_t power[8];
-	uint32_t n = l->n;
-	for (uint32_t i = 0; i < n; i++) {
-		int32_t x = l->ring[(l->next + i) % UT_RING];
-		total += (uint64_t)((int64_t)x * x);
-	}
+	*num = d->hop * d->dec;
+	*den = d->rate;
+}
+
+void ut_classify(const int64_t power[8], uint64_t energy, uint32_t n, char *key, int16_t *level)
+{
 	*key = 0;
 	*level = -990;
 	/* quieter than -55 dBFS: silence (32768^2 * 10^-5.5 per sample) */
-	if (total < (uint64_t)3395 * n) return;
-	for (int f = 0; f < 8; f++) {
-		int64_t s1 = 0, s2 = 0, c = l->coeff[f];       /* cos(w), Q15 */
-		for (uint32_t i = 0; i < n; i++) {
-			int64_t s0 = l->ring[(l->next + i) % UT_RING] + ((2 * c * s1) >> 15) - s2;
-			s2 = s1; s1 = s0;
-		}
-		power[f] = s1 * s1 + s2 * s2 - ((2 * c * s1) >> 15) * s2;    /* |X|^2 */
-	}
+	if (energy < (uint64_t)3395 * n) return;
 	int r = 0, cc = 0;
 	for (int i = 1; i < 4; i++) {
 		if (power[i] > power[r]) r = i;
@@ -1524,20 +1512,72 @@ static UT_HOT void detect(ut_listener *l, char *key, int16_t *level)
 		if (i != r && power[i] > lo2) lo2 = power[i];
 		if (i != cc && power[4 + i] > hi2) hi2 = power[4 + i];
 	}
-	/* power * 2 / n compared with total (the reference's normalisation) */
+	/* power * 2 / n compared with the energy (the reference's normalisation) */
 	int ok = lo > 2 * lo2 && hi > 2 * hi2
-	         && 2 * (lo + hi) > (int64_t)total * n / 5
+	         && 2 * (lo + hi) > (int64_t)energy * n / 5
 	         && 100 * hi > lo && 100 * lo > hi;
 	/* the tone's level in dBFS: |X|^2 of a full-scale sine is (n/2 * 32768)^2 */
 	*level = (int16_t)(db10((uint64_t)(lo + hi > 0 ? lo + hi : 1)) - db10((uint64_t)n * n / 4 * 32768u * 32768u));
 	if (ok) *key = PAD[r][cc];
 }
 
+/* one 10 ms detection over the last 25 ms */
+static UT_HOT void detect(ut_detector *d, ut_det *out)
+{
+	uint64_t total = 0;
+	int64_t power[8] = {0};
+	uint32_t n = d->n;
+	for (uint32_t i = 0; i < n; i++) {
+		int32_t x = d->ring[(d->next + i) % UT_RING];
+		total += (uint64_t)((int64_t)x * x);
+	}
+	if (total >= (uint64_t)3395 * n)       /* not silence: worth the eight filters */
+		for (int f = 0; f < 8; f++) {
+			int64_t s1 = 0, s2 = 0, c = d->coeff[f];       /* cos(w), Q15 */
+			for (uint32_t i = 0; i < n; i++) {
+				int64_t s0 = d->ring[(d->next + i) % UT_RING] + ((2 * c * s1) >> 15) - s2;
+				s2 = s1; s1 = s0;
+			}
+			power[f] = s1 * s1 + s2 * s2 - ((2 * c * s1) >> 15) * s2;    /* |X|^2 */
+		}
+	ut_classify(power, total, n, &out->key, &out->level);
+	d->level = out->level;
+}
+
+size_t ut_detector_push(ut_detector *d, const int16_t *x, size_t n, size_t *used, ut_det *out, size_t cap)
+{
+	size_t i = 0, k = 0;
+	for (; i < n && k < cap; i++) {
+		d->dec_sum += x[i];
+		if (++d->dec_count < d->dec) continue;
+		d->ring[d->total % UT_RING] = (int16_t)(d->dec_sum / (int32_t)d->dec);
+		d->dec_sum = 0;
+		d->dec_count = 0;
+		d->total++;
+		if (d->total >= d->next + d->n) {
+			detect(d, &out[k++]);
+			d->next += d->hop;
+		}
+	}
+	if (used) *used = i;
+	return k;
+}
+
+/* ---- listening: detections to groups ---------------------------------------- */
+
+void ut_listener_init(ut_listener *l, uint32_t rate)
+{
+	memset(l, 0, sizeof *l);
+	ut_detector_init(&l->det, rate);
+	l->last_end = -1;
+	l->level = -990;
+}
+
 /* a key lasting fewer than min_hops from i: a glitch */
 static int short_run(const ut_listener *l, uint32_t i, char k, uint32_t min_hops)
 {
 	uint32_t m = 0;
-	while (i + m < l->ndet && l->det[i + m].key == k && m < min_hops) m++;
+	while (i + m < l->ndet && l->dets[i + m].key == k && m < min_hops) m++;
 	return m < min_hops;
 }
 
@@ -1574,7 +1614,7 @@ static int keypad_open(const ut_listener *l)
 static void tone(ut_listener *l, char key, int64_t start, int64_t end)
 {
 	/* (start - last_end) hops of hop*dec/rate s: more than 225 ms? */
-	int long_pause = l->last_end >= 0 && (uint64_t)(start - l->last_end) * l->hop * l->dec * 1000 > (uint64_t)225 * l->rate;
+	int long_pause = l->last_end >= 0 && (uint64_t)(start - l->last_end) * l->det.hop * l->det.dec * 1000 > (uint64_t)225 * l->det.rate;
 	if (l->clen && long_pause && !keypad_open(l)) group_close(l);
 	if (keypad_open(l) && !((key >= '0' && key <= '9') || key == '#')) group_close(l);
 	if (l->clen < UT_GROUP) l->current[l->clen++] = key;
@@ -1611,8 +1651,8 @@ static void segment(ut_listener *l)
 	} while (0)
 
 	for (uint32_t i = 0; i < l->ndet; i++) {
-		char k = l->det[i].key;
-		int lvl = l->det[i].level;
+		char k = l->dets[i].key;
+		int lvl = l->dets[i].level;
 		if (have_cur && k && k == cur_key && gap <= bridge_hops) {
 			if (dipped && lvl > cur_peak - near) {
 				CLOSE();
@@ -1646,15 +1686,12 @@ static void batch(ut_listener *l)
 	if (!keypad_open(l)) group_close(l);
 }
 
-static void step(ut_listener *l)
+static void step(ut_listener *l, char k, int16_t lvl)
 {
-	char k;
-	int16_t lvl;
-	detect(l, &k, &lvl);
 	l->level = lvl;
 	if (l->ndet == UT_MAX_DETS) batch(l);           /* a very long group: cut it */
-	l->det[l->ndet].key = k;
-	l->det[l->ndet].level = lvl;
+	l->dets[l->ndet].key = k;
+	l->dets[l->ndet].level = lvl;
 	l->ndet++;
 	if (k == l->live_key) {
 		if (++l->live_run == 3 && k && l->nlive < UT_LIVE) l->live[l->nlive++] = k;
@@ -1664,22 +1701,17 @@ static void step(ut_listener *l)
 	}
 	l->silent = k ? 0 : l->silent + 1;
 	/* 300 ms of silence: segment what came before */
-	if ((uint64_t)l->silent * l->hop * l->dec * 1000 >= (uint64_t)300 * l->rate && l->ndet > l->silent) batch(l);
+	if ((uint64_t)l->silent * l->det.hop * l->det.dec * 1000 >= (uint64_t)300 * l->det.rate && l->ndet > l->silent) batch(l);
 }
 
 void ut_listener_push(ut_listener *l, const int16_t *x, size_t n)
 {
-	for (size_t i = 0; i < n; i++) {
-		l->dec_sum += x[i];
-		if (++l->dec_count < l->dec) continue;
-		l->ring[l->total % UT_RING] = (int16_t)(l->dec_sum / (int32_t)l->dec);
-		l->dec_sum = 0;
-		l->dec_count = 0;
-		l->total++;
-		if (l->total >= l->next + l->n) {
-			step(l);
-			l->next += l->hop;
-		}
+	ut_det d[8];
+	while (n) {
+		size_t used, k = ut_detector_push(&l->det, x, n, &used, d, 8);
+		for (size_t i = 0; i < k; i++) step(l, d[i].key, d[i].level);
+		x += used;
+		n -= used;
 	}
 }
 
