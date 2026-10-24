@@ -67,3 +67,24 @@
  *   #include "esp_attr.h"
  *   #define UT_HOT IRAM_ATTR
  */
+
+/* ---- hardware hooks ----------------------------------------------------------- */
+
+/* SHA-256's compression, for accelerators that can load a state (the seed
+ * PIN runs PBKDF2-HMAC-SHA256: 10,000 iterations, 2 blocks each, from the
+ * ipad/opad states the library keeps). ESP32-S3/C3/C6, STM32 parts with a
+ * HASH peripheral (context swap), nRF CC3xx, or an assembly routine:
+ *
+ *   void my_sha256_block(uint32_t state[8], const uint8_t block[64]);
+ *   #define UT_SHA256_BLOCK my_sha256_block
+ */
+
+/* PBKDF2-HMAC-SHA256 whole, for accelerators that only hash whole messages
+ * from the standard start (the RP2350's SHA-256, the original ESP32's), or
+ * a firmware that already carries mbedTLS (mbedtls_pkcs5_pbkdf2_hmac_ext) or
+ * wolfSSL: the library's own PBKDF2 and HMAC are then left out.
+ *
+ *   void my_pbkdf2(const uint8_t *pw, size_t pwlen, const uint8_t *salt, size_t saltlen,
+ *                  uint32_t iterations, uint8_t *out, size_t outlen);
+ *   #define UT_PBKDF2_SHA256 my_pbkdf2
+ */

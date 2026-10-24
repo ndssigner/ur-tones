@@ -88,6 +88,15 @@ extern "C" {
 #ifndef UT_HOT
 #define UT_HOT
 #endif
+/* Hardware hooks (none by default; the portable code is used):
+ *   UT_SHA256_BLOCK   the name of a function
+ *                     void f(uint32_t state[8], const uint8_t block[64])
+ *                     that runs SHA-256's compression (an accelerator that
+ *                     can load a state). The PIN costs 20,000 of them.
+ *   UT_PBKDF2_SHA256  the name of a function with ut_pbkdf2_sha256's
+ *                     signature that replaces it whole (an accelerator that
+ *                     cannot load a state, or mbedTLS/wolfSSL already in the
+ *                     firmware). */
 
 /* ---- protocol limits (SPEC.md; not options) ---- */
 #define UT_PARITY 32          /* Reed-Solomon parity bytes per frame */

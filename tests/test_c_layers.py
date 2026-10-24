@@ -544,16 +544,41 @@ def test_frames():
     check(r.returncode == 0, "NDS-Signer's calls compile: " + r.stderr[:300])
 
 
+# ---- hooks: SHA-256 and PBKDF2 by hardware -------------------------------------------
+
+def test_hooks():
+    import hashlib
+    impl = [ROOT / "tests" / "c" / "hooks_impl.c"]
+    seed = next(v for v in VECTORS if v.get("pin") and "keypad" in v)
+    for name in ("hook_block.h", "hook_pbkdf2.h"):
+        lib = build("ut_" + name[:-2], config(name), sources=impl)
+        lib.ut_sha256.argtypes = [u8p, c_size_t, u8p]
+        out = (ctypes.c_uint8 * 32)()
+        ok = True
+        for n in (0, 55, 56, 64, 1000):
+            data = bytes((7 * i + 1) & 255 for i in range(n))
+            lib.ut_sha256((ctypes.c_uint8 * max(1, n)).from_buffer_copy(data or b"\0"), n, out)
+            ok &= bytes(out) == hashlib.sha256(data).digest()
+        check(ok, "%s: SHA-256 = hashlib's" % name)
+        blocks, calls = (ctypes.c_uint32.in_dll(lib, v) for v in ("ut_test_blocks", "ut_test_pbkdf2"))
+        blocks.value = calls.value = 0
+        check(seeds_round_trip(lib), "%s: keypad and seed URs with their PINs" % name)
+        pins = sum(2 for v in VECTORS if v.get("pin") and "keypad" in v)      # keypad and seed UR each
+        if name == "hook_block.h":
+            check(pins * 20000 <= blocks.value <= pins * 20010 + 100, "a PIN costs 20,000 blocks: %d for %d" % (blocks.value, pins))
+        else:
+            check(calls.value == pins, "PBKDF2 called once per PIN: %d for %d" % (calls.value, pins))
+
+
+TESTS = [test_config, test_globals, test_unsigned_char, test_int32_results, test_detector, test_keys_from_detections,
+         test_tone_events, test_player, test_frames, test_hooks]
+
+
 def main():
-    test_config()
-    test_globals()
-    test_unsigned_char()
-    test_int32_results()
-    test_detector()
-    test_keys_from_detections()
-    test_tone_events()
-    test_player()
-    test_frames()
+    """All the tests, or those named: python3 tests/test_c_layers.py test_hooks"""
+    for t in TESTS:
+        if len(sys.argv) < 2 or t.__name__ in sys.argv[1:]:
+            t()
     print("%s: %d checks, %d failures" % ("ok" if not failures else "FAIL", checks, failures))
     sys.exit(1 if failures else 0)
 

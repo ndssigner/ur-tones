@@ -31,6 +31,9 @@ static int key_index(char k)
 
 /* ---- SHA-256, HMAC, PBKDF2 ---------------------------------------------- */
 
+#ifdef UT_SHA256_BLOCK
+void UT_SHA256_BLOCK(uint32_t state[8], const uint8_t block[64]);
+#else
 static const uint32_t K256[64] UT_ROM = {
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
 	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -41,6 +44,8 @@ static const uint32_t K256[64] UT_ROM = {
 	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
 	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
 
+#endif
+
 typedef struct {
 	uint32_t h[8];
 	uint8_t buf[64];
@@ -49,6 +54,9 @@ typedef struct {
 
 #define ROR(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
 
+#ifdef UT_SHA256_BLOCK
+static void sha256_block(sha256_ctx *c, const uint8_t *p) { UT_SHA256_BLOCK(c->h, p); }
+#else
 static UT_HOT void sha256_block(sha256_ctx *c, const uint8_t *p)
 {
 	uint32_t w[64], a, b, d, e, f, g, h, cc;
@@ -67,6 +75,8 @@ static UT_HOT void sha256_block(sha256_ctx *c, const uint8_t *p)
 	}
 	c->h[0] += a; c->h[1] += b; c->h[2] += cc; c->h[3] += d; c->h[4] += e; c->h[5] += f; c->h[6] += g; c->h[7] += h;
 }
+
+#endif
 
 static void sha256_init(sha256_ctx *c)
 {
@@ -111,6 +121,16 @@ void ut_sha256(const uint8_t *data, size_t len, uint8_t out[32])
 	sha256_final(&c, out);
 }
 
+#ifdef UT_PBKDF2_SHA256
+void UT_PBKDF2_SHA256(const uint8_t *pw, size_t pwlen, const uint8_t *salt, size_t saltlen,
+                      uint32_t iterations, uint8_t *out, size_t outlen);
+
+void ut_pbkdf2_sha256(const uint8_t *pw, size_t pwlen, const uint8_t *salt, size_t saltlen,
+                      uint32_t iterations, uint8_t *out, size_t outlen)
+{
+	UT_PBKDF2_SHA256(pw, pwlen, salt, saltlen, iterations, out, outlen);
+}
+#else
 /* HMAC-SHA256 with the inner and outer states prepared once (PBKDF2 reuses them) */
 typedef struct { sha256_ctx inner, outer; } hmac_ctx;
 
@@ -158,6 +178,8 @@ void ut_pbkdf2_sha256(const uint8_t *pw, size_t pwlen, const uint8_t *salt, size
 		memcpy(out + pos, t, outlen - pos < 32 ? outlen - pos : 32);
 	}
 }
+
+#endif
 
 /* The seed PIN (SPEC §4): entropy ^= PBKDF2(upper-case PIN). */
 static int pin_xor(uint8_t *entropy, size_t len, const char *pin)
