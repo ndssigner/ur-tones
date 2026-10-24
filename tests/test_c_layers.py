@@ -169,9 +169,27 @@ def test_globals():
     check(gen_tables.c_array("EXP", exp) + gen_tables.c_array("LOG", log) in src, "Reed-Solomon tables as generated")
 
 
+# ---- unsigned char (ARM's default) -------------------------------------------
+
+def test_unsigned_char():
+    lib = build("ut_uchar", "-funsigned-char")
+    check(frames_round_trip(lib), "unsigned char: frames round trip")
+    check(seeds_round_trip(lib), "unsigned char: keypad and seed URs")
+
+
+def test_int32_results():
+    """Results that are lengths or errors are int32_t: 16-bit ints can't hold a big PSBT's."""
+    h = (ROOT / "c" / "ur_tones.h").read_text()
+    import re
+    bad = re.findall(r"^int (ut_\w+)\(", h, re.M)
+    check(not bad, "int32_t results, not int: %s" % bad)
+
+
 def main():
     test_config()
     test_globals()
+    test_unsigned_char()
+    test_int32_results()
     print("%s: %d checks, %d failures" % ("ok" if not failures else "FAIL", checks, failures))
     sys.exit(1 if failures else 0)
 

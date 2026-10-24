@@ -18,7 +18,8 @@
  * it costs). Impossible values stop the build with an #error.
  *
  * Tones are ASCII keys: 0-9 A-D * #. Strings are NUL-terminated. Functions
- * that write return the length written (>= 0) or a negative UT_ERR_*.
+ * that write return the length written (>= 0) or a negative UT_ERR_*, as an
+ * int32_t (an int is 16 bits on some MCUs; a PSBT can be longer).
  */
 #ifndef UR_TONES_H
 #define UR_TONES_H
@@ -112,21 +113,21 @@ enum {
 /* ---- frames: a UR text (single-part, or one part of a multi-part UR) ---- */
 
 /* The tones of the frame that carries `ur` (lead-in, sync, codeword). */
-int ut_ur_to_frame(const char *ur, char *tones, size_t cap);
+int32_t ut_ur_to_frame(const char *ur, char *tones, size_t cap);
 
 /* The UR text of a frame's tones (lead-in optional). Repairs up to 16 wrong
  * bytes, and one lost or one extra tone. `corrected` (may be NULL) gets the
  * number of bytes repaired. */
-int ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected);
+int32_t ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected);
 
 /* ---- seeds ---------------------------------------------------------------
  * entropy: 16 or 32 bytes. pin: NULL or "" for none, else letters and
  * digits (case-insensitive). */
-int ut_seed_to_keypad(const uint8_t *entropy, size_t len, const char *pin, char *out, size_t cap);
+int32_t ut_seed_to_keypad(const uint8_t *entropy, size_t len, const char *pin, char *out, size_t cap);
 /* Returns the entropy's length (16 or 32) written to `entropy` (32 bytes). */
-int ut_keypad_to_seed(const char *tones, const char *pin, uint8_t *entropy);
-int ut_seed_to_ur(const uint8_t *entropy, size_t len, const char *pin, char *ur, size_t cap);
-int ut_ur_to_seed(const char *ur, const char *pin, uint8_t *entropy);
+int32_t ut_keypad_to_seed(const char *tones, const char *pin, uint8_t *entropy);
+int32_t ut_seed_to_ur(const uint8_t *entropy, size_t len, const char *pin, char *ur, size_t cap);
+int32_t ut_ur_to_seed(const char *ur, const char *pin, uint8_t *entropy);
 
 /* ---- multi-part URs: UR's fountain codes (BCR-2020-005), as ur2 ----------
  * A message (a UR's CBOR, e.g. a PSBT's) longer than one fragment goes as
@@ -152,13 +153,13 @@ typedef struct {
 } ut_fountain_encoder;
 
 /* max_fragment: 100 is SPEC §2.4's (about 19 s per frame by cable). */
-int ut_fountain_encoder_init(ut_fountain_encoder *e, const uint8_t *msg, size_t len, size_t max_fragment);
+int32_t ut_fountain_encoder_init(ut_fountain_encoder *e, const uint8_t *msg, size_t len, size_t max_fragment);
 /* The next UR to send, forever: the message as one UR if it fits one
  * fragment, else the next part ("ur:<type>/<n>-<seq_len>/…"). Each goes in
  * a frame (ut_ur_to_frame). */
-int ut_fountain_next_ur(ut_fountain_encoder *e, const char *type, char *ur, size_t cap);
+int32_t ut_fountain_next_ur(ut_fountain_encoder *e, const char *type, char *ur, size_t cap);
 /* The next part's CBOR: [seqNum, seqLen, messageLen, checksum, fragment]. */
-int ut_fountain_next_part(ut_fountain_encoder *e, uint8_t *out, size_t cap);
+int32_t ut_fountain_next_part(ut_fountain_encoder *e, uint8_t *out, size_t cap);
 
 typedef struct {
 	char type[64];
@@ -173,22 +174,22 @@ typedef struct {
  * least the message's length plus a few fragments; twice the message keeps
  * every useful part. The result is read from it. */
 #define UT_FOUNTAIN_WORK(message_len) (2 * (message_len) + 4 * UT_MAX_FRAGMENT)
-int ut_fountain_decoder_init(ut_fountain_decoder *d, uint8_t *work, size_t work_len);
+int32_t ut_fountain_decoder_init(ut_fountain_decoder *d, uint8_t *work, size_t work_len);
 /* A UR heard (ut_frame_to_ur): the whole message or one of its parts.
  * Returns 1 when the message is complete (and its CRC-32 checks), 0 while
  * more are needed (progress: nknown of seq_len fragments), or an error:
  * UT_ERR_MESSAGE for a part of another message. */
-int ut_fountain_receive(ut_fountain_decoder *d, const char *ur);
-int ut_fountain_result(const ut_fountain_decoder *d, const char **type, const uint8_t **msg, size_t *len);
+int32_t ut_fountain_receive(ut_fountain_decoder *d, const char *ur);
+int32_t ut_fountain_result(const ut_fountain_decoder *d, const char **type, const uint8_t **msg, size_t *len);
 /* The fragments a part carries, as bits of `set` ((seq_len + 7) / 8 bytes).
  * Exposed for tests. `t` keeps the degree table for one seq_len: zero it
  * before its first use. */
-int ut_fountain_choose(ut_sampler *t, uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set);
+int32_t ut_fountain_choose(ut_sampler *t, uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set);
 
 /* ---- PSBTs: the CBOR of crypto-psbt and psbt (a byte string) ---------------- */
-int ut_psbt_to_cbor(const uint8_t *psbt, size_t len, uint8_t *out, size_t cap);
+int32_t ut_psbt_to_cbor(const uint8_t *psbt, size_t len, uint8_t *out, size_t cap);
 /* *psbt points into cbor. */
-int ut_cbor_to_psbt(const uint8_t *cbor, size_t len, const uint8_t **psbt, size_t *psbt_len);
+int32_t ut_cbor_to_psbt(const uint8_t *cbor, size_t len, const uint8_t **psbt, size_t *psbt_len);
 
 /* ---- a signer's public keys ------------------------------------------------
  * An account's extended public key, which the signer derives (BIP-32): out
@@ -209,13 +210,13 @@ typedef struct {
 } ut_xpub;
 /* prefix: "xpub", "ypub", "zpub", "Ypub" or "Zpub"; a testnet key comes out as
  * tpub, upub, vpub, Upub or Vpub. */
-int ut_xpub_text(const ut_xpub *k, const char *prefix, char *out, size_t cap);
-int ut_descriptor_text(const char *script, const ut_xpub *k, char *out, size_t cap);
-int ut_hdkey_cbor(const ut_xpub *k, int current, uint8_t *out, size_t cap);
-int ut_output_cbor(const char *script, const ut_xpub *k, int current, uint8_t *out, size_t cap);
+int32_t ut_xpub_text(const ut_xpub *k, const char *prefix, char *out, size_t cap);
+int32_t ut_descriptor_text(const char *script, const ut_xpub *k, char *out, size_t cap);
+int32_t ut_hdkey_cbor(const ut_xpub *k, int current, uint8_t *out, size_t cap);
+int32_t ut_output_cbor(const char *script, const ut_xpub *k, int current, uint8_t *out, size_t cap);
 /* An account: one script and key per entry (BIP-44, 49, 84, 86, 48…). */
-int ut_account_cbor(uint32_t master_fp, const char *const *scripts, const ut_xpub *keys, size_t n,
-                    int current, uint8_t *out, size_t cap);
+int32_t ut_account_cbor(uint32_t master_fp, const char *const *scripts, const ut_xpub *keys, size_t n,
+                        int current, uint8_t *out, size_t cap);
 
 /* ---- synthesis -------------------------------------------------------- */
 
@@ -265,9 +266,9 @@ void ut_listener_push(ut_listener *l, const int16_t *x, size_t n);
 /* At the end of a recording: closes what is pending. */
 void ut_listener_flush(ut_listener *l);
 /* The next group of tones heard (a frame, or keypad mode), or 0 if none. */
-int ut_listener_group(ut_listener *l, char *out, size_t cap);
+int32_t ut_listener_group(ut_listener *l, char *out, size_t cap);
 /* Keys heard since the last call, as they come (a rough, immediate view). */
-int ut_listener_live(ut_listener *l, char *out, size_t cap);
+int32_t ut_listener_live(ut_listener *l, char *out, size_t cap);
 
 /* ---- building blocks, exposed for tests ---------------------------------- */
 void ut_sha256(const uint8_t *data, size_t len, uint8_t out[32]);
@@ -275,7 +276,7 @@ void ut_pbkdf2_sha256(const uint8_t *pw, size_t pwlen, const uint8_t *salt, size
                       uint32_t iterations, uint8_t *out, size_t outlen);
 uint32_t ut_crc32(const uint8_t *data, size_t len);
 /* Corrects up to nsym / 2 wrong bytes in place; returns how many, or UT_ERR_DECODE. */
-int ut_rs_correct(uint8_t *codeword, size_t n, size_t nsym);
+int32_t ut_rs_correct(uint8_t *codeword, size_t n, size_t nsym);
 void ut_rs_encode(const uint8_t *data, size_t n, size_t nsym, uint8_t *parity);
 
 #ifdef __cplusplus

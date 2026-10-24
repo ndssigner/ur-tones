@@ -276,7 +276,7 @@ void ut_rs_encode(const uint8_t *data, size_t n, size_t nsym, uint8_t *parity)
 	memcpy(parity, rem, nsym);
 }
 
-int ut_rs_correct(uint8_t *cw, size_t n, size_t nsym)
+int32_t ut_rs_correct(uint8_t *cw, size_t n, size_t nsym)
 {
 	uint8_t synd[UT_PARITY], lam[UT_PARITY + 1] = {1}, prev[UT_PARITY + 1] = {1}, next[UT_PARITY + 1];
 	uint8_t omega[UT_PARITY] = {0}, rev[UT_PARITY + 1];
@@ -562,7 +562,7 @@ static int from_tones(const char *tones, size_t len, char previous, uint8_t *out
 
 /* ---- frames -------------------------------------------------------------------- */
 
-int ut_ur_to_frame(const char *ur, char *tones, size_t cap)
+int32_t ut_ur_to_frame(const char *ur, char *tones, size_t cap)
 {
 	ur_t u;
 	uint8_t cw[256];
@@ -625,7 +625,7 @@ static int frame_body(const char *tones, size_t len, char *ur, size_t cap, int *
 	return r < 0 ? (r == UT_ERR_SPACE ? r : UT_ERR_DECODE) : r;
 }
 
-int ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected)
+int32_t ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected)
 {
 	size_t len = strlen(tones), starts[4], ns = 0;
 	int err = UT_ERR_SYNC;
@@ -679,7 +679,7 @@ static void indices(const uint8_t *e, size_t len, uint16_t *idx)
 	(void)nbits;
 }
 
-int ut_seed_to_keypad(const uint8_t *entropy, size_t len, const char *pin, char *out, size_t cap)
+int32_t ut_seed_to_keypad(const uint8_t *entropy, size_t len, const char *pin, char *out, size_t cap)
 {
 	uint8_t e[32];
 	uint16_t idx[24];
@@ -699,10 +699,10 @@ int ut_seed_to_keypad(const uint8_t *entropy, size_t len, const char *pin, char 
 	out[1 + 4 * words] = '#';
 	out[2 + 4 * words] = 0;
 	memset(e, 0, sizeof e);
-	return (int)(2 + 4 * words);
+	return (int32_t)(2 + 4 * words);
 }
 
-int ut_keypad_to_seed(const char *tones, const char *pin, uint8_t *entropy)
+int32_t ut_keypad_to_seed(const char *tones, const char *pin, uint8_t *entropy)
 {
 	size_t len = strlen(tones), nd = len - 2, words = nd / 4;
 	uint16_t idx[24], check[24];
@@ -724,10 +724,10 @@ int ut_keypad_to_seed(const char *tones, const char *pin, uint8_t *entropy)
 	indices(entropy, elen, check);
 	if (check[words - 1] != idx[words - 1]) return UT_ERR_CHECKSUM;
 	int r = pin_xor(entropy, elen, pin);
-	return r ? r : (int)elen;
+	return r ? r : (int32_t)elen;
 }
 
-int ut_seed_to_ur(const uint8_t *entropy, size_t len, const char *pin, char *ur, size_t cap)
+int32_t ut_seed_to_ur(const uint8_t *entropy, size_t len, const char *pin, char *ur, size_t cap)
 {
 	uint8_t body[36];
 	size_t n = 0;
@@ -743,7 +743,7 @@ int ut_seed_to_ur(const uint8_t *entropy, size_t len, const char *pin, char *ur,
 	return r;
 }
 
-int ut_ur_to_seed(const char *ur, const char *pin, uint8_t *entropy)
+int32_t ut_ur_to_seed(const char *ur, const char *pin, uint8_t *entropy)
 {
 	ur_t u;
 	size_t i = 2;
@@ -756,7 +756,7 @@ int ut_ur_to_seed(const char *ur, const char *pin, uint8_t *entropy)
 	memcpy(entropy, u.body + i, len);
 	memset(&u, 0, sizeof u);
 	r = pin_xor(entropy, len, pin);
-	return r ? r : (int)len;
+	return r ? r : (int32_t)len;
 }
 
 /* ---- IEEE 754 doubles, for UR's fountain codes ---------------------------------
@@ -929,7 +929,7 @@ static void choose(ut_sampler *t, uint32_t seq_num, uint32_t seq_len, uint32_t c
 	}
 }
 
-int ut_fountain_choose(ut_sampler *t, uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set)
+int32_t ut_fountain_choose(ut_sampler *t, uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set)
 {
 	if (!t || !seq_num || !seq_len || seq_len > UT_MAX_PARTS) return UT_ERR_ARG;
 	choose(t, seq_num, seq_len, checksum, set);
@@ -946,7 +946,7 @@ static uint32_t fragment_length(uint32_t len, uint32_t max)
 	return len;
 }
 
-int ut_fountain_encoder_init(ut_fountain_encoder *e, const uint8_t *msg, size_t len, size_t max_fragment)
+int32_t ut_fountain_encoder_init(ut_fountain_encoder *e, const uint8_t *msg, size_t len, size_t max_fragment)
 {
 	if (!len || len > UINT32_MAX || !max_fragment || max_fragment > UT_MAX_FRAGMENT) return UT_ERR_ARG;
 	e->msg = msg;
@@ -959,7 +959,7 @@ int ut_fountain_encoder_init(ut_fountain_encoder *e, const uint8_t *msg, size_t 
 	return e->seq_len > UT_MAX_PARTS ? UT_ERR_TOO_LONG : UT_OK;
 }
 
-int ut_fountain_next_part(ut_fountain_encoder *e, uint8_t *out, size_t cap)
+int32_t ut_fountain_next_part(ut_fountain_encoder *e, uint8_t *out, size_t cap)
 {
 	uint8_t set[(UT_MAX_PARTS + 7) / 8], h[5 * 4];
 	size_t n = 0;
@@ -979,10 +979,10 @@ int ut_fountain_next_part(ut_fountain_encoder *e, uint8_t *out, size_t cap)
 		if (!(set[i / 8] >> i % 8 & 1)) continue;
 		for (uint32_t j = 0; j < f && i * f + j < e->len; j++) out[n + j] ^= e->msg[i * f + j];
 	}
-	return (int)(n + f);
+	return (int32_t)(n + f);
 }
 
-int ut_fountain_next_ur(ut_fountain_encoder *e, const char *type, char *ur, size_t cap)
+int32_t ut_fountain_next_ur(ut_fountain_encoder *e, const char *type, char *ur, size_t cap)
 {
 	uint8_t body[UT_MAX_FRAGMENT + 32];
 	int n;
@@ -1046,7 +1046,7 @@ static int subset(const uint8_t *a, const uint8_t *b, uint32_t n) /* a within b 
 	return 1;
 }
 
-int ut_fountain_decoder_init(ut_fountain_decoder *d, uint8_t *work, size_t work_len)
+int32_t ut_fountain_decoder_init(ut_fountain_decoder *d, uint8_t *work, size_t work_len)
 {
 	memset(d, 0, sizeof *d);
 	d->work = work;
@@ -1113,7 +1113,7 @@ static int receive_part(ut_fountain_decoder *d, const uint8_t *body, size_t n)
 	return 1;
 }
 
-int ut_fountain_receive(ut_fountain_decoder *d, const char *ur)
+int32_t ut_fountain_receive(ut_fountain_decoder *d, const char *ur)
 {
 	ur_t u;
 	int r = parse_ur(ur, &u);
@@ -1131,7 +1131,7 @@ int ut_fountain_receive(ut_fountain_decoder *d, const char *ur)
 	return receive_part(d, u.body, u.n);
 }
 
-int ut_fountain_result(const ut_fountain_decoder *d, const char **type, const uint8_t **msg, size_t *len)
+int32_t ut_fountain_result(const ut_fountain_decoder *d, const char **type, const uint8_t **msg, size_t *len)
 {
 	if (!d->done) return UT_ERR_ARG;
 	if (type) *type = d->type;
@@ -1142,16 +1142,16 @@ int ut_fountain_result(const ut_fountain_decoder *d, const char **type, const ui
 
 /* ---- PSBTs: crypto-psbt and psbt are a CBOR byte string --------------------------- */
 
-int ut_psbt_to_cbor(const uint8_t *psbt, size_t len, uint8_t *out, size_t cap)
+int32_t ut_psbt_to_cbor(const uint8_t *psbt, size_t len, uint8_t *out, size_t cap)
 {
 	if (len > UINT32_MAX) return UT_ERR_ARG;
 	if (cap < len + 5) return UT_ERR_SPACE;
 	size_t n = cbor_head(out, 2, (uint32_t)len);
 	memmove(out + n, psbt, len);
-	return (int)(n + len);
+	return (int32_t)(n + len);
 }
 
-int ut_cbor_to_psbt(const uint8_t *cbor, size_t len, const uint8_t **psbt, size_t *psbt_len)
+int32_t ut_cbor_to_psbt(const uint8_t *cbor, size_t len, const uint8_t **psbt, size_t *psbt_len)
 {
 	size_t i = 0;
 	uint32_t n;
@@ -1228,7 +1228,7 @@ static void w_output(writer *w, const char *script, const ut_xpub *k, int curren
 	}
 }
 
-int ut_hdkey_cbor(const ut_xpub *k, int current, uint8_t *out, size_t cap)
+int32_t ut_hdkey_cbor(const ut_xpub *k, int current, uint8_t *out, size_t cap)
 {
 	uint8_t tmp[256];
 	writer w = {tmp, sizeof tmp, 0, 0};
@@ -1237,17 +1237,17 @@ int ut_hdkey_cbor(const ut_xpub *k, int current, uint8_t *out, size_t cap)
 	size_t skip = 3;                      /* the UR body is the map: without its tag */
 	if (w.n - skip > cap) return UT_ERR_SPACE;
 	memcpy(out, tmp + skip, w.n - skip);
-	return (int)(w.n - skip);
+	return (int32_t)(w.n - skip);
 }
 
-int ut_output_cbor(const char *script, const ut_xpub *k, int current, uint8_t *out, size_t cap)
+int32_t ut_output_cbor(const char *script, const ut_xpub *k, int current, uint8_t *out, size_t cap)
 {
 	writer w = {out, cap, 0, 0};
 	w_output(&w, script, k, current);
-	return w.err ? w.err : (int)w.n;
+	return w.err ? w.err : (int32_t)w.n;
 }
 
-int ut_account_cbor(uint32_t master_fp, const char *const *scripts, const ut_xpub *keys, size_t n,
+int32_t ut_account_cbor(uint32_t master_fp, const char *const *scripts, const ut_xpub *keys, size_t n,
                     int current, uint8_t *out, size_t cap)
 {
 	writer w = {out, cap, 0, 0};
@@ -1259,7 +1259,7 @@ int ut_account_cbor(uint32_t master_fp, const char *const *scripts, const ut_xpu
 		if (current) w_head(&w, 6, TAGS[1][T_OUTPUT]);
 		w_output(&w, scripts[i], &keys[i], current);
 	}
-	return w.err ? w.err : (int)w.n;
+	return w.err ? w.err : (int32_t)w.n;
 }
 
 /* ---- the same keys as text: an xpub (or ypub, zpub…), a descriptor ---------------- */
@@ -1270,7 +1270,7 @@ static const struct { const char *prefix; uint32_t main, test; } VERSIONS[] = {
 	{"Ypub", 0x0295B43F, 0x024289EF}, {"Zpub", 0x02AA7ED3, 0x02575483},
 };
 
-int ut_xpub_text(const ut_xpub *k, const char *prefix, char *out, size_t cap)
+int32_t ut_xpub_text(const ut_xpub *k, const char *prefix, char *out, size_t cap)
 {
 	uint8_t d[82], h[32];
 	int v = -1;
@@ -1302,7 +1302,7 @@ int ut_xpub_text(const ut_xpub *k, const char *prefix, char *out, size_t cap)
 	for (size_t i = 0; i < zeros; i++) out[i] = '1';
 	for (size_t i = 0; i < nd; i++) out[zeros + i] = tmp[nd - 1 - i];
 	out[zeros + nd] = 0;
-	return (int)(zeros + nd);
+	return (int32_t)(zeros + nd);
 }
 
 /* Bitcoin Core's descriptor checksum */
@@ -1330,7 +1330,7 @@ static void desc_checksum(const char *s, char out[9])
 	out[8] = 0;
 }
 
-int ut_descriptor_text(const char *script, const ut_xpub *k, char *out, size_t cap)
+int32_t ut_descriptor_text(const char *script, const ut_xpub *k, char *out, size_t cap)
 {
 	char key[320], xpub[120];
 	size_t pos = 0, kp = 0;
@@ -1354,7 +1354,7 @@ int ut_descriptor_text(const char *script, const ut_xpub *k, char *out, size_t c
 	char sum[9];
 	desc_checksum(out, sum);
 	if ((r = put_str(out, cap, &pos, "#")) || (r = put_str(out, cap, &pos, sum))) return r;
-	return (int)pos;
+	return (int32_t)pos;
 }
 
 /* ---- sine, levels ------------------------------------------------------------- */
@@ -1689,7 +1689,7 @@ void ut_listener_flush(ut_listener *l)
 	group_close(l);
 }
 
-int ut_listener_group(ut_listener *l, char *out, size_t cap)
+int32_t ut_listener_group(ut_listener *l, char *out, size_t cap)
 {
 	if (!l->rcount) return 0;
 	const char *g = l->ready[l->rhead];
@@ -1698,14 +1698,14 @@ int ut_listener_group(ut_listener *l, char *out, size_t cap)
 	memcpy(out, g, n + 1);
 	l->rhead = (l->rhead + 1) % UT_READY;
 	l->rcount--;
-	return (int)n;
+	return (int32_t)n;
 }
 
-int ut_listener_live(ut_listener *l, char *out, size_t cap)
+int32_t ut_listener_live(ut_listener *l, char *out, size_t cap)
 {
 	size_t n = l->nlive < cap - 1 ? l->nlive : cap - 1;
 	memcpy(out, l->live, n);
 	out[n] = 0;
 	l->nlive = 0;
-	return (int)n;
+	return (int32_t)n;
 }
