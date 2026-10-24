@@ -31,7 +31,7 @@ static int key_index(char k)
 
 /* ---- SHA-256, HMAC, PBKDF2 ---------------------------------------------- */
 
-static const uint32_t K256[64] = {
+static const uint32_t K256[64] UT_ROM = {
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
 	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
 	0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
@@ -49,7 +49,7 @@ typedef struct {
 
 #define ROR(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
 
-static void sha256_block(sha256_ctx *c, const uint8_t *p)
+static UT_HOT void sha256_block(sha256_ctx *c, const uint8_t *p)
 {
 	uint32_t w[64], a, b, d, e, f, g, h, cc;
 	for (int i = 0; i < 16; i++)
@@ -61,7 +61,7 @@ static void sha256_block(sha256_ctx *c, const uint8_t *p)
 	}
 	a = c->h[0]; b = c->h[1]; cc = c->h[2]; d = c->h[3]; e = c->h[4]; f = c->h[5]; g = c->h[6]; h = c->h[7];
 	for (int i = 0; i < 64; i++) {
-		uint32_t t1 = h + (ROR(e, 6) ^ ROR(e, 11) ^ ROR(e, 25)) + ((e & f) ^ (~e & g)) + K256[i] + w[i];
+		uint32_t t1 = h + (ROR(e, 6) ^ ROR(e, 11) ^ ROR(e, 25)) + ((e & f) ^ (~e & g)) + UT_ROM_U32(&K256[i]) + w[i];
 		uint32_t t2 = (ROR(a, 2) ^ ROR(a, 13) ^ ROR(a, 22)) + ((a & b) ^ (a & cc) ^ (b & cc));
 		h = g; g = f; f = e; e = d + t1; d = cc; cc = b; b = a; a = t1 + t2;
 	}
@@ -307,7 +307,7 @@ int ut_rs_correct(uint8_t *cw, size_t n, size_t nsym)
 
 /* ---- bytewords (minimal: first and last letter of each word) --------------- */
 
-static const char BYTEWORDS[] =
+static const char BYTEWORDS[] UT_ROM =
 	"ableacidalsoapexaquaarchatomauntawayaxisbackbaldbarnbeltbetabiasbluebody"
 	"bragbrewbulbbuzzcalmcashcatschefcityclawcodecolacookcostcruxcurlcuspcyan"
 	"darkdatadaysdelidicedietdoordowndrawdropdrumdulldutyeacheasyechoedgeepic"
@@ -324,10 +324,12 @@ static const char BYTEWORDS[] =
 	"wandwarmwaspwavewaxywebswhatwhenwhizwolfworkyankyawnyellyogayurtzapszero"
 	"zestzinczonezoom";
 
+#define BW(i) ((char)UT_ROM_U8((const uint8_t *)&BYTEWORDS[i]))
+
 static int byteword(char a, char b)
 {
 	for (int i = 0; i < 256; i++)
-		if (BYTEWORDS[4 * i] == a && BYTEWORDS[4 * i + 3] == b)
+		if (BW(4 * i) == a && BW(4 * i + 3) == b)
 			return i;
 	return -1;
 }
@@ -340,8 +342,8 @@ static int put_bytewords(const uint8_t *data, size_t n, char *out, size_t cap)
 		return UT_ERR_SPACE;
 	for (size_t i = 0; i < n + 4; i++) {
 		uint8_t b = i < n ? data[i] : (uint8_t)(crc >> (8 * (3 - (i - n))));
-		out[2 * i] = BYTEWORDS[4 * b];
-		out[2 * i + 1] = BYTEWORDS[4 * b + 3];
+		out[2 * i] = BW(4 * b);
+		out[2 * i + 1] = BW(4 * b + 3);
 	}
 	out[2 * (n + 4)] = 0;
 	return (int)(2 * (n + 4));
@@ -1228,7 +1230,7 @@ int ut_account_cbor(uint32_t master_fp, const char *const *scripts, const ut_xpu
 
 /* ---- the same keys as text: an xpub (or ypub, zpub…), a descriptor ---------------- */
 
-static const char B58[] = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+static const char B58[] UT_ROM = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 static const struct { const char *prefix; uint32_t main, test; } VERSIONS[] = {
 	{"xpub", 0x0488B21E, 0x043587CF}, {"ypub", 0x049D7CB2, 0x044A5262}, {"zpub", 0x04B24746, 0x045F1CF6},
 	{"Ypub", 0x0295B43F, 0x024289EF}, {"Zpub", 0x02AA7ED3, 0x02575483},
@@ -1259,7 +1261,7 @@ int ut_xpub_text(const ut_xpub *k, const char *prefix, char *out, size_t cap)
 			d[i] = (uint8_t)(cur / 58);
 			rem = cur % 58;
 		}
-		tmp[nd++] = B58[rem];
+		tmp[nd++] = (char)UT_ROM_U8((const uint8_t *)&B58[rem]);
 		while (start < 82 && !d[start]) start++;
 	}
 	if (zeros + nd + 1 > cap) return UT_ERR_SPACE;
@@ -1324,7 +1326,7 @@ int ut_descriptor_text(const char *script, const ut_xpub *k, char *out, size_t c
 /* ---- sine, levels ------------------------------------------------------------- */
 
 /* sin over a quarter turn, Q15 (257 entries) */
-static const int16_t QSIN[257] = {
+static const uint16_t QSIN[257] UT_ROM = {
 	0, 201, 402, 603, 804, 1005, 1206, 1407, 1608, 1809, 2009, 2210,
 	2410, 2611, 2811, 3012, 3212, 3412, 3612, 3811, 4011, 4210, 4410, 4609,
 	4808, 5007, 5205, 5404, 5602, 5800, 5998, 6195, 6393, 6590, 6786, 6983,
@@ -1352,7 +1354,7 @@ static const int16_t QSIN[257] = {
 static int32_t sin_step(uint32_t idx)   /* idx: 0..1024, a full turn is 1024 */
 {
 	uint32_t q = (idx >> 8) & 3, i = idx & 255;
-	int32_t v = q & 1 ? QSIN[256 - i] : QSIN[i];
+	int32_t v = UT_ROM_U16(&QSIN[q & 1 ? 256 - i : i]);
 	return q & 2 ? -v : v;
 }
 
@@ -1407,7 +1409,7 @@ static void start_tone(ut_synth *s)
 	s->pos = 0;
 }
 
-size_t ut_synth_read(ut_synth *s, int16_t *out, size_t n)
+UT_HOT size_t ut_synth_read(ut_synth *s, int16_t *out, size_t n)
 {
 	size_t w = 0;
 	while (w < n && s->stage != 4) {
@@ -1447,7 +1449,6 @@ void ut_listener_init(ut_listener *l, uint32_t rate)
 	l->srate = rate / l->dec;
 	l->n = l->srate * 25 / 1000;                    /* 25 ms windows */
 	l->hop = l->srate * 10 / 1000;                  /* every 10 ms */
-	if (l->n > UT_RING - l->hop) l->n = UT_RING - l->hop;
 	for (int i = 0; i < 8; i++) {
 		uint32_t f = i < 4 ? LOW[i] : HIGH[i - 4];
 		/* 2 cos(w) = 2 sin(w + pi/2), Q14 */
@@ -1458,7 +1459,7 @@ void ut_listener_init(ut_listener *l, uint32_t rate)
 }
 
 /* one 10 ms detection over the last 25 ms */
-static void detect(ut_listener *l, char *key, int16_t *level)
+static UT_HOT void detect(ut_listener *l, char *key, int16_t *level)
 {
 	uint64_t total = 0;
 	int64_t power[8];

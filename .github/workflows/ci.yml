@@ -31,6 +31,8 @@ jobs:
         run: python3 tests/test_c.py
       - name: C library, multi-part URs and keys, with integers and with doubles
         run: python3 tests/test_c_multipart.py
+      - name: C library, its configuration, layers and hooks
+        run: python3 tests/test_c_layers.py
       - name: C library uses no floating point by default (CPUs without an FPU)
         run: cc -std=c99 -Wall -Werror -mgeneral-regs-only -c c/ur_tones.c -o /dev/null
       - name: JavaScript against the vectors (and audio)

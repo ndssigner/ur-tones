@@ -12,12 +12,10 @@
  * ARM9, a Raspberry Pi Pico). Checked against the Python reference, the test
  * vectors, ur2's parts and Blockchain Commons' vectors by tests/test_c.py.
  *
- * Build options (-D…):
- *   UT_USE_DOUBLE=1   the CPU's (or compiler's) doubles for the fountain
- *                     codes, instead of integers: the same results.
- *   UT_MAX_PARTS      fragments in a multi-part message (default 256: about
- *                     25 KB at 100 bytes each); each encoder and decoder
- *                     keeps 12 bytes per part for UR's degree table.
+ * Configuration: every option below can be set with -D… or, better, in a
+ * header of one's own named by -DUT_CONFIG_FILE="my_config.h" (included
+ * first; see ur_tones_config.example.h, which lists each option with what
+ * it costs). Impossible values stop the build with an #error.
  *
  * Tones are ASCII keys: 0-9 A-D * #. Strings are NUL-terminated. Functions
  * that write return the length written (>= 0) or a negative UT_ERR_*.
@@ -32,17 +30,70 @@
 extern "C" {
 #endif
 
+#ifdef UT_CONFIG_FILE
+#include UT_CONFIG_FILE
+#endif
+
+/* ---- options (ur_tones_config.example.h explains each) ---- */
+#ifndef UT_USE_DOUBLE
+#define UT_USE_DOUBLE 0       /* 1: the CPU's doubles for the fountain codes (same results) */
+#endif
+#ifndef UT_MAX_PARTS
+#define UT_MAX_PARTS 256      /* fragments in a multi-part message: 12 B each per encoder/decoder */
+#endif
+#ifndef UT_GROUP
+#define UT_GROUP 600          /* tones in a group the receiver keeps */
+#endif
+#ifndef UT_READY
+#define UT_READY 4            /* groups waiting to be taken: UT_GROUP + 1 bytes each */
+#endif
+#ifndef UT_LIVE
+#define UT_LIVE 64            /* live keys waiting to be taken */
+#endif
+#ifndef UT_RING
+#define UT_RING 1024          /* samples (at ~8 kHz) the receiver keeps: 2 B each */
+#endif
+/* Placement: UT_ROM on constant tables, read through UT_ROM_U8/U16/U32 (on
+ * AVR: PROGMEM and pgm_read_byte/word/dword); UT_HOT on the hot loops (on
+ * the RP2040/RP2350: a .time_critical section, run from RAM). */
+#ifndef UT_ROM
+#define UT_ROM
+#endif
+#ifndef UT_ROM_U8
+#define UT_ROM_U8(p) (*(p))
+#endif
+#ifndef UT_ROM_U16
+#define UT_ROM_U16(p) (*(p))
+#endif
+#ifndef UT_ROM_U32
+#define UT_ROM_U32(p) (*(p))
+#endif
+#ifndef UT_HOT
+#define UT_HOT
+#endif
+
+/* ---- protocol limits (SPEC.md; not options) ---- */
 #define UT_PARITY 32          /* Reed-Solomon parity bytes per frame */
 #define UT_MAX_FRAME 560      /* tones in the longest frame, plus room */
 #define UT_MAX_UR 1100        /* characters in the longest UR text a frame carries */
 #define UT_MAX_KEYPAD 100     /* "*" + 96 digits + "#" + NUL */
-#ifndef UT_USE_DOUBLE
-#define UT_USE_DOUBLE 0
-#endif
-#ifndef UT_MAX_PARTS
-#define UT_MAX_PARTS 256
-#endif
 #define UT_MAX_FRAGMENT 200   /* bytes in a multi-part UR's fragment (a frame carries one part) */
+
+#if UT_GROUP < UT_MAX_FRAME
+#error "UT_GROUP must be at least UT_MAX_FRAME (560): a frame's tones must fit a group"
+#endif
+#if UT_RING < 560
+#error "UT_RING must be at least 560: a 25 ms window and a 10 ms hop at up to 16 kHz"
+#endif
+#if UT_READY < 1
+#error "UT_READY must be at least 1"
+#endif
+#if UT_LIVE < 1
+#error "UT_LIVE must be at least 1"
+#endif
+#if UT_MAX_PARTS < 1 || UT_MAX_PARTS > 65535
+#error "UT_MAX_PARTS must be from 1 to 65535"
+#endif
 
 enum {
 	UT_OK = 0,
@@ -185,10 +236,6 @@ size_t ut_synth_read(ut_synth *s, int16_t *out, size_t n);
 /* ---- listening -------------------------------------------------------- */
 
 #define UT_MAX_DETS 8192      /* 10 ms detections kept between silences: 82 s */
-#define UT_RING 1024          /* samples, after bringing them down to ~8 kHz */
-#define UT_GROUP 600          /* tones in a group */
-#define UT_READY 4            /* groups waiting to be taken */
-#define UT_LIVE 64            /* live keys waiting to be taken */
 
 typedef struct {
 	uint32_t rate, dec, srate, n, hop;
