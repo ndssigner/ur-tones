@@ -3,10 +3,21 @@
  * SPDX-License-Identifier: MIT
  *
  * Frames (UR text <-> tones), keypad mode, seed URs, the seed PIN, tone
- * synthesis and a streaming receiver. No malloc, no floating point: integer
- * Goertzel, a sine table and fixed buffers, for CPUs without an FPU (the
- * Nintendo DSi's ARM9). Checked against the Python reference and the test
- * vectors by tests/test_c.py.
+ * synthesis and a streaming receiver; UR's fountain codes (multi-part URs,
+ * both ways), PSBTs as CBOR, and a signer's public keys as xpub text,
+ * descriptors and the hdkey, output-descriptor and account-descriptor URs
+ * (and their older crypto-* forms). No malloc, no floating point: integer
+ * Goertzel, a sine table, IEEE doubles done with integers where UR needs
+ * them, and fixed buffers, for CPUs without an FPU (the Nintendo DSi's
+ * ARM9, a Raspberry Pi Pico). Checked against the Python reference, the test
+ * vectors, ur2's parts and Blockchain Commons' vectors by tests/test_c.py.
+ *
+ * Build options (-D…):
+ *   UT_USE_DOUBLE=1   the CPU's (or compiler's) doubles for the fountain
+ *                     codes, instead of integers: the same results.
+ *   UT_MAX_PARTS      fragments in a multi-part message (default 256: about
+ *                     25 KB at 100 bytes each); each encoder and decoder
+ *                     keeps 12 bytes per part for UR's degree table.
  *
  * Tones are ASCII keys: 0-9 A-D * #. Strings are NUL-terminated. Functions
  * that write return the length written (>= 0) or a negative UT_ERR_*.
@@ -25,6 +36,13 @@ extern "C" {
 #define UT_MAX_FRAME 560      /* tones in the longest frame, plus room */
 #define UT_MAX_UR 1100        /* characters in the longest UR text a frame carries */
 #define UT_MAX_KEYPAD 100     /* "*" + 96 digits + "#" + NUL */
+#ifndef UT_USE_DOUBLE
+#define UT_USE_DOUBLE 0
+#endif
+#ifndef UT_MAX_PARTS
+#define UT_MAX_PARTS 256
+#endif
+#define UT_MAX_FRAGMENT 200   /* bytes in a multi-part UR's fragment (a frame carries one part) */
 
 enum {
 	UT_OK = 0,
@@ -37,6 +55,7 @@ enum {
 	UT_ERR_DECODE = -7,    /* more errors than Reed-Solomon repairs, or a bad frame */
 	UT_ERR_PIN = -8,       /* a PIN is letters A-Z and digits 0-9 */
 	UT_ERR_SEED = -9,      /* not a seed (12 or 24 words; a crypto-seed UR) */
+	UT_ERR_MESSAGE = -10,  /* a part of another message (start a new decoder) */
 };
 
 /* ---- frames: a UR text (single-part, or one part of a multi-part UR) ---- */
@@ -57,6 +76,94 @@ int ut_seed_to_keypad(const uint8_t *entropy, size_t len, const char *pin, char 
 int ut_keypad_to_seed(const char *tones, const char *pin, uint8_t *entropy);
 int ut_seed_to_ur(const uint8_t *entropy, size_t len, const char *pin, char *ur, size_t cap);
 int ut_ur_to_seed(const char *ur, const char *pin, uint8_t *entropy);
+
+/* ---- multi-part URs: UR's fountain codes (BCR-2020-005), as ur2 ----------
+ * A message (a UR's CBOR, e.g. a PSBT's) longer than one fragment goes as
+ * parts in a loop: the first seq_len are its fragments, the rest mix
+ * several. A receiver needs about seq_len parts, any of them, mixed ones
+ * included: a lost frame costs one frame. */
+
+#if UT_USE_DOUBLE
+typedef double ut_f64;
+#else
+typedef uint64_t ut_f64;      /* an IEEE 754 double's bits */
+#endif
+typedef struct {              /* the degree table (Vose's alias method) */
+	uint32_t n;
+	ut_f64 prob[UT_MAX_PARTS];
+	uint16_t alias[UT_MAX_PARTS], stack[UT_MAX_PARTS];
+} ut_sampler;
+
+typedef struct {
+	const uint8_t *msg;       /* kept, not copied */
+	uint32_t len, checksum, fragment, seq_len, seq_num;
+	ut_sampler sampler;
+} ut_fountain_encoder;
+
+/* max_fragment: 100 is SPEC §2.4's (about 19 s per frame by cable). */
+int ut_fountain_encoder_init(ut_fountain_encoder *e, const uint8_t *msg, size_t len, size_t max_fragment);
+/* The next UR to send, forever: the message as one UR if it fits one
+ * fragment, else the next part ("ur:<type>/<n>-<seq_len>/…"). Each goes in
+ * a frame (ut_ur_to_frame). */
+int ut_fountain_next_ur(ut_fountain_encoder *e, const char *type, char *ur, size_t cap);
+/* The next part's CBOR: [seqNum, seqLen, messageLen, checksum, fragment]. */
+int ut_fountain_next_part(ut_fountain_encoder *e, uint8_t *out, size_t cap);
+
+typedef struct {
+	char type[64];
+	uint8_t *work, *msg, *known, *pool;
+	size_t work_len;
+	uint32_t seq_len, len, checksum, fragment, set_bytes, nknown, nmixed, max_mixed;
+	int done;
+	ut_sampler sampler;
+} ut_fountain_decoder;
+
+/* work: memory for the message and the mixed parts waiting to be used: at
+ * least the message's length plus a few fragments; twice the message keeps
+ * every useful part. The result is read from it. */
+#define UT_FOUNTAIN_WORK(message_len) (2 * (message_len) + 4 * UT_MAX_FRAGMENT)
+int ut_fountain_decoder_init(ut_fountain_decoder *d, uint8_t *work, size_t work_len);
+/* A UR heard (ut_frame_to_ur): the whole message or one of its parts.
+ * Returns 1 when the message is complete (and its CRC-32 checks), 0 while
+ * more are needed (progress: nknown of seq_len fragments), or an error:
+ * UT_ERR_MESSAGE for a part of another message. */
+int ut_fountain_receive(ut_fountain_decoder *d, const char *ur);
+int ut_fountain_result(const ut_fountain_decoder *d, const char **type, const uint8_t **msg, size_t *len);
+/* The fragments a part carries, as bits of `set` ((seq_len + 7) / 8 bytes).
+ * Exposed for tests (not reentrant: it keeps one table). */
+int ut_fountain_choose(uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set);
+
+/* ---- PSBTs: the CBOR of crypto-psbt and psbt (a byte string) ---------------- */
+int ut_psbt_to_cbor(const uint8_t *psbt, size_t len, uint8_t *out, size_t cap);
+/* *psbt points into cbor. */
+int ut_cbor_to_psbt(const uint8_t *cbor, size_t len, const uint8_t **psbt, size_t *psbt_len);
+
+/* ---- a signer's public keys ------------------------------------------------
+ * An account's extended public key, which the signer derives (BIP-32): out
+ * as xpub text (or ypub, zpub, Ypub, Zpub: SLIP-132), as a descriptor with
+ * its checksum, or as the CBOR of a UR to send: hdkey, output-descriptor
+ * (BCR-2023-010) and account-descriptor (BCR-2023-019) when current is 1,
+ * crypto-hdkey, crypto-output and crypto-account (the older types, for
+ * older wallets) when 0. A script is the key's descriptor around "@0":
+ * "pkh(@0)", "sh(wpkh(@0))", "wpkh(@0)", "tr(@0)", "wsh(cosigner(@0))"… */
+typedef struct {
+	uint8_t key[33];          /* compressed public key */
+	uint8_t chain[32];        /* chain code */
+	uint32_t parent_fp;       /* the parent key's fingerprint */
+	uint32_t source_fp;       /* the master key's fingerprint */
+	const uint32_t *path;     /* from the master key; hardened: | 0x80000000 */
+	size_t depth;             /* steps in path */
+	int testnet;
+} ut_xpub;
+/* prefix: "xpub", "ypub", "zpub", "Ypub" or "Zpub"; a testnet key comes out as
+ * tpub, upub, vpub, Upub or Vpub. */
+int ut_xpub_text(const ut_xpub *k, const char *prefix, char *out, size_t cap);
+int ut_descriptor_text(const char *script, const ut_xpub *k, char *out, size_t cap);
+int ut_hdkey_cbor(const ut_xpub *k, int current, uint8_t *out, size_t cap);
+int ut_output_cbor(const char *script, const ut_xpub *k, int current, uint8_t *out, size_t cap);
+/* An account: one script and key per entry (BIP-44, 49, 84, 86, 48…). */
+int ut_account_cbor(uint32_t master_fp, const char *const *scripts, const ut_xpub *keys, size_t n,
+                    int current, uint8_t *out, size_t cap);
 
 /* ---- synthesis -------------------------------------------------------- */
 

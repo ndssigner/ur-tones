@@ -96,12 +96,20 @@ air-gapped device.
   only; the frames and seeds also run on MicroPython.
 - `c/ur_tones.{h,c}`: the same in C99 for small devices — frames, repairs,
   keypad mode, seed URs and PIN, tone synthesis and a streaming receiver —
-  with no `malloc` and **no floating point** (integer Goertzel, a sine
-  table): about 12 KB of ARM code, for CPUs without an FPU like the
-  Nintendo DSi's (NDS-Signer). `tests/test_c.py` checks it against the
-  vectors and the Python reference, audio included, both ways. Like the
-  Python reference, it carries one UR part per frame; joining the parts of a
-  multi-part UR (fountain codes) is left to a UR library.
+  plus what a signer needs around them: UR's **fountain codes** (multi-part
+  URs, sent and received, mixed parts included), PSBTs as CBOR, and its
+  **public keys** as xpub text, descriptors and the `hdkey`,
+  `output-descriptor` and `account-descriptor` URs (or the older `crypto-*`
+  ones). No `malloc` and **no floating point**: integer Goertzel, a sine
+  table, and the few IEEE doubles that UR's fountain codes need done with
+  integers (`-DUT_USE_DOUBLE=1` uses the CPU's instead, with the same
+  results). About 17 KB of Thumb-2 code (Cortex-M, a Raspberry Pi Pico) or
+  26 KB of ARM code, for CPUs without an FPU like the Nintendo DSi's
+  (NDS-Signer). `tests/test_c.py` checks it against the vectors and the
+  Python reference, audio included, both ways; `tests/test_c_multipart.py`
+  checks the fountain codes against ur2 (its parts, and its choice of
+  fragments run with real doubles) and the keys against Blockchain
+  Commons' vectors and the web tool, built both ways.
 - `vectors/ur-tones-v0.json`: test vectors, public test data only — test
   seeds, testnet PSBTs, and the xpubs and descriptors of the BIP-39 test
   seed (`crypto-hdkey`, `crypto-output`, `crypto-account`) and `bytes`
@@ -120,6 +128,7 @@ air-gapped device.
 ```bash
 python3 tests/test_reference.py      # the Python reference
 python3 tests/test_c.py              # the C library (needs cc)
+python3 tests/test_c_multipart.py    # its fountain codes and keys (cc; Node.js too)
 node web/test.mjs                    # the JavaScript (Node.js ≥ 18)
 node web/build.mjs                   # dist/ur-tones.html + its SHA-256
 python3 tools/bundle.py v0.3.0       # the release zip, reproducible

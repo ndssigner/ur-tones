@@ -722,6 +722,605 @@ int ut_ur_to_seed(const char *ur, const char *pin, uint8_t *entropy)
 	return r ? r : (int)len;
 }
 
+/* ---- IEEE 754 doubles, for UR's fountain codes ---------------------------------
+ * ur2 (and every UR library) picks a mixed part's fragments with doubles: a
+ * receiver must make the very same roundings. By default they are made here
+ * with integers (round to nearest, ties to even; normal numbers and zero are
+ * all these values ever are). UT_USE_DOUBLE=1 uses the CPU's own instead. */
+
+typedef ut_f64 f64;
+#if UT_USE_DOUBLE
+static f64 f_u64(uint64_t x) { return (f64)x; }
+static f64 f_add(f64 a, f64 b) { return a + b; }
+static f64 f_sub(f64 a, f64 b) { return a - b; }
+static f64 f_mul(f64 a, f64 b) { return a * b; }
+static f64 f_div(f64 a, f64 b) { return a / b; }
+static int f_lt(f64 a, f64 b) { return a < b; }
+static uint32_t f_floor(f64 a) { return (uint32_t)a; }
+static f64 f_over_2_64(uint64_t x) { return (f64)x / 18446744073709551616.0; }
+#else /* f64: the IEEE 754 bits */
+#define F_FRAC ((UINT64_C(1) << 52) - 1)
+
+/* value = m * 2^e (m > 0, any bits): rounded to 53 bits, packed. A bit 0 that
+ * was "jammed" (ORed in for lost bits) always sits below the rounding point. */
+static f64 f_pack(int neg, int e, uint64_t m)
+{
+	int top = 63;
+	while (!(m >> top)) top--;
+	if (top > 52) {
+		int s = top - 52;
+		uint64_t lost = m & ((UINT64_C(1) << s) - 1), half = UINT64_C(1) << (s - 1);
+		m >>= s; e += s;
+		if (lost > half || (lost == half && (m & 1))) m++;
+		if (m >> 53) { m >>= 1; e++; }
+	} else { m <<= 52 - top; e -= 52 - top; }
+	return (uint64_t)neg << 63 | (uint64_t)(e + 1075) << 52 | (m & F_FRAC);
+}
+static void f_unpack(f64 a, int *neg, int *e, uint64_t *m)
+{
+	*neg = (int)(a >> 63);
+	*e = (int)(a >> 52 & 0x7FF) - 1075;
+	*m = (a & F_FRAC) | UINT64_C(1) << 52;
+}
+static f64 f_u64(uint64_t x) { return x ? f_pack(0, 0, x) : 0; }
+static f64 f_add(f64 a, f64 b)
+{
+	int na, ea, nb, eb;
+	uint64_t ma, mb, m;
+	if (!(a << 1)) return b;
+	if (!(b << 1)) return a;
+	f_unpack(a, &na, &ea, &ma); f_unpack(b, &nb, &eb, &mb);
+	if (eb > ea || (eb == ea && mb > ma)) { f64 t = a; a = b; b = t; return f_add(a, b); }
+	ma <<= 9; mb <<= 9;                       /* 9 guard bits */
+	int d = ea - eb;
+	if (d > 62) mb = 1;
+	else if (d) mb = mb >> d | ((mb << (64 - d)) != 0);
+	m = na == nb ? ma + mb : ma - mb;
+	return m ? f_pack(na, ea - 9, m) : 0;
+}
+static f64 f_sub(f64 a, f64 b) { return f_add(a, b ^ UINT64_C(1) << 63); }
+static f64 f_mul(f64 a, f64 b)
+{
+	int na, ea, nb, eb;
+	uint64_t ma, mb;
+	if (!(a << 1) || !(b << 1)) return 0;
+	f_unpack(a, &na, &ea, &ma); f_unpack(b, &nb, &eb, &mb);
+	/* the 106-bit product, in 32-bit pieces */
+	uint64_t al = ma & 0xFFFFFFFF, ah = ma >> 32, bl = mb & 0xFFFFFFFF, bh = mb >> 32;
+	uint64_t ll = al * bl, lh = al * bh, hl = ah * bl, hh = ah * bh;
+	uint64_t mid = (ll >> 32) + (lh & 0xFFFFFFFF) + (hl & 0xFFFFFFFF);
+	uint64_t lo = (ll & 0xFFFFFFFF) | mid << 32, hi = hh + (lh >> 32) + (hl >> 32) + (mid >> 32);
+	/* keep the top 64 bits of the 128, the rest jammed into bit 0 */
+	uint64_t m = hi << 22 | lo >> 42 | ((lo & ((UINT64_C(1) << 42) - 1)) != 0);
+	return f_pack(na ^ nb, ea + eb + 42, m);
+}
+static f64 f_div(f64 a, f64 b)
+{
+	int na, ea, nb, eb;
+	uint64_t ma, mb, q = 0;
+	if (!(a << 1)) return 0;
+	f_unpack(a, &na, &ea, &ma); f_unpack(b, &nb, &eb, &mb);
+	for (int i = 0; i < 62; i++) {            /* 62 quotient bits */
+		q <<= 1;
+		if (ma >= mb) { ma -= mb; q |= 1; }
+		ma <<= 1;
+	}
+	return f_pack(na ^ nb, ea - eb - 61, q | (ma != 0));
+}
+static int f_lt(f64 a, f64 b)
+{
+	uint64_t ka = a >> 63 ? ~a : a | UINT64_C(1) << 63, kb = b >> 63 ? ~b : b | UINT64_C(1) << 63;
+	return ka < kb;
+}
+static uint32_t f_floor(f64 a) /* a >= 0, < 2^32 */
+{
+	int neg, e;
+	uint64_t m;
+	if (!(a << 1)) return 0;
+	f_unpack(a, &neg, &e, &m);
+	return e >= 0 ? (uint32_t)(m << e) : -e > 63 ? 0 : (uint32_t)(m >> -e);
+}
+static f64 f_over_2_64(uint64_t x) { return x ? f_u64(x) - ((uint64_t)64 << 52) : 0; }
+#endif
+
+/* ---- UR fountain codes (BCR-2020-005), as ur2 -------------------------------------- */
+
+typedef struct { uint64_t s[4]; } xoshiro;
+static uint64_t rotl64(uint64_t x, int k) { return x << k | x >> (64 - k); }
+static uint64_t xo_next(xoshiro *x)
+{
+	uint64_t *s = x->s, r = rotl64(s[1] * 5, 7) * 9, t = s[1] << 17;
+	s[2] ^= s[0]; s[3] ^= s[1]; s[1] ^= s[2]; s[0] ^= s[3];
+	s[2] ^= t;
+	s[3] = rotl64(s[3], 45);
+	return r;
+}
+static f64 xo_double(xoshiro *x) { return f_over_2_64(xo_next(x)); }
+
+/* Vose's alias method over the degrees 1..n with weights 1/d, as ur2 builds
+ * it (the same operations in the same order: the same roundings) */
+static void sampler_build(ut_sampler *t, uint32_t n)
+{
+	f64 total = 0, one = f_u64(1), fn = f_u64(n);
+	uint16_t *stack = t->stack;       /* small ones from the front, large ones from the back */
+	uint32_t ns = 0, nl = 0;
+	for (uint32_t i = 0; i < n; i++) total = f_add(total, f_div(one, f_u64(i + 1)));
+	for (uint32_t i = 0; i < n; i++) t->prob[i] = f_div(f_mul(f_div(one, f_u64(i + 1)), fn), total);
+	for (uint32_t j = n; j-- > 0;) {
+		if (f_lt(t->prob[j], one)) stack[ns++] = (uint16_t)j;
+		else stack[n - 1 - nl++] = (uint16_t)j;
+	}
+	while (ns && nl) {
+		uint16_t a = stack[--ns], g = stack[n - nl--];
+		t->alias[a] = g;                  /* prob[a] stays as it is: final */
+		t->prob[g] = f_add(t->prob[g], f_sub(t->prob[a], one));
+		if (f_lt(t->prob[g], one)) stack[ns++] = g;
+		else stack[n - 1 - nl++] = g;
+	}
+	while (nl) t->prob[stack[n - nl--]] = one;
+	while (ns) t->prob[stack[--ns]] = one;
+	t->n = n;
+}
+
+static void put_be32(uint8_t *p, uint32_t v) { for (int i = 0; i < 4; i++) p[i] = (uint8_t)(v >> (24 - 8 * i)); }
+
+/* the fragments a part carries, as bits of `set` (seq_len bits) */
+static void choose(ut_sampler *t, uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set)
+{
+	memset(set, 0, (seq_len + 7) / 8);
+	if (seq_num <= seq_len) { set[(seq_num - 1) / 8] |= (uint8_t)(1 << (seq_num - 1) % 8); return; }
+	uint8_t seed[8], h[32];
+	xoshiro x;
+	put_be32(seed, seq_num); put_be32(seed + 4, checksum);
+	ut_sha256(seed, 8, h);
+	for (int i = 0; i < 4; i++) {
+		x.s[i] = 0;
+		for (int j = 0; j < 8; j++) x.s[i] = x.s[i] << 8 | h[8 * i + j];
+	}
+	if (t->n != seq_len) sampler_build(t, seq_len);
+	f64 r1 = xo_double(&x), r2 = xo_double(&x);
+	uint32_t i = f_floor(f_mul(f_u64(seq_len), r1));
+	uint32_t degree = (f_lt(r2, t->prob[i]) ? i : t->alias[i]) + 1;
+	/* the first `degree` items of ur2's shuffle of 0..seq_len-1 */
+	for (uint32_t k = 0; k < degree; k++) {
+		uint32_t pick = f_floor(f_mul(xo_double(&x), f_u64(seq_len - k))), j = 0;
+		for (;; j++) {
+			if (set[j / 8] >> j % 8 & 1) continue;
+			if (!pick--) break;
+		}
+		set[j / 8] |= (uint8_t)(1 << j % 8);
+	}
+}
+
+int ut_fountain_choose(uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set)
+{
+	static ut_sampler t;
+	if (!seq_num || !seq_len || seq_len > UT_MAX_PARTS) return UT_ERR_ARG;
+	choose(&t, seq_num, seq_len, checksum, set);
+	return UT_OK;
+}
+
+static uint32_t fragment_length(uint32_t len, uint32_t max)
+{
+	uint32_t n = len < 10 ? 1 : len / 10;  /* ur2's minimum fragment: 10 bytes */
+	for (uint32_t count = 1; count <= n; count++) {
+		uint32_t f = (len + count - 1) / count;
+		if (f <= max) return f;
+	}
+	return len;
+}
+
+int ut_fountain_encoder_init(ut_fountain_encoder *e, const uint8_t *msg, size_t len, size_t max_fragment)
+{
+	if (!len || len > UINT32_MAX || !max_fragment || max_fragment > UT_MAX_FRAGMENT) return UT_ERR_ARG;
+	e->msg = msg;
+	e->len = (uint32_t)len;
+	e->checksum = ut_crc32(msg, len);
+	e->fragment = fragment_length(e->len, (uint32_t)max_fragment);
+	e->seq_len = (e->len + e->fragment - 1) / e->fragment;
+	e->seq_num = 0;
+	e->sampler.n = 0;
+	return e->seq_len > UT_MAX_PARTS ? UT_ERR_TOO_LONG : UT_OK;
+}
+
+int ut_fountain_next_part(ut_fountain_encoder *e, uint8_t *out, size_t cap)
+{
+	uint8_t set[(UT_MAX_PARTS + 7) / 8], h[5 * 4];
+	size_t n = 0;
+	uint32_t f = e->fragment;
+	e->seq_num++;
+	n += cbor_head(h, 4, 5);
+	n += cbor_head(h + n, 0, e->seq_num);
+	if (n + 4 * 5 + 5 + f > cap) return UT_ERR_SPACE;
+	memcpy(out, h, n);
+	n += cbor_head(out + n, 0, e->seq_len);
+	n += cbor_head(out + n, 0, e->len);
+	n += cbor_head(out + n, 0, e->checksum);
+	n += cbor_head(out + n, 2, f);
+	choose(&e->sampler, e->seq_num, e->seq_len, e->checksum, set);
+	memset(out + n, 0, f);
+	for (uint32_t i = 0; i < e->seq_len; i++) {
+		if (!(set[i / 8] >> i % 8 & 1)) continue;
+		for (uint32_t j = 0; j < f && i * f + j < e->len; j++) out[n + j] ^= e->msg[i * f + j];
+	}
+	return (int)(n + f);
+}
+
+int ut_fountain_next_ur(ut_fountain_encoder *e, const char *type, char *ur, size_t cap)
+{
+	uint8_t body[UT_MAX_FRAGMENT + 32];
+	int n;
+	if (e->seq_len == 1) return ur_text(type, KIND_SINGLE, e->msg, e->len, ur, cap);
+	if ((n = ut_fountain_next_part(e, body, sizeof body)) < 0) return n;
+	return ur_text(type, KIND_PART, body, (size_t)n, ur, cap);
+}
+
+/* ---- the receiving end ------------------------------------------------------------ */
+/* Work memory: the message (seq_len fragments), which fragments are known
+ * (bits), then a pool of mixed parts, each its fragments' bits and its data. */
+
+static int has(const uint8_t *set, uint32_t i) { return set[i / 8] >> i % 8 & 1; }
+static uint32_t count_bits(const uint8_t *set, uint32_t nbytes)
+{
+	uint32_t c = 0;
+	for (uint32_t i = 0; i < nbytes; i++) for (uint8_t b = set[i]; b; b &= (uint8_t)(b - 1)) c++;
+	return c;
+}
+static uint8_t *pool_entry(ut_fountain_decoder *d, uint32_t k) { return d->pool + (size_t)k * (d->set_bytes + d->fragment); }
+
+/* takes out of (set, data) the fragments already known */
+static void reduce_known(ut_fountain_decoder *d, uint8_t *set, uint8_t *data)
+{
+	for (uint32_t i = 0; i < d->seq_len; i++) {
+		if (!has(set, i) || !has(d->known, i)) continue;
+		for (uint32_t j = 0; j < d->fragment; j++) data[j] ^= d->msg[(size_t)i * d->fragment + j];
+		set[i / 8] &= (uint8_t)~(1 << i % 8);
+	}
+}
+static uint32_t first_bit(const uint8_t *set, uint32_t n)
+{
+	uint32_t i = 0;
+	while (i < n && !has(set, i)) i++;
+	return i;
+}
+static void learn(ut_fountain_decoder *d, uint32_t i, const uint8_t *data)
+{
+	memcpy(d->msg + (size_t)i * d->fragment, data, d->fragment);
+	d->known[i / 8] |= (uint8_t)(1 << i % 8);
+	d->nknown++;
+}
+/* mixed parts that became simple, or empty, as fragments were learnt */
+static void sweep(ut_fountain_decoder *d)
+{
+	for (int changed = 1; changed;) {
+		changed = 0;
+		for (uint32_t k = 0; k < d->nmixed;) {
+			uint8_t *e = pool_entry(d, k), *data = e + d->set_bytes;
+			reduce_known(d, e, data);
+			uint32_t c = count_bits(e, d->set_bytes);
+			if (c > 1) { k++; continue; }
+			if (c == 1) { learn(d, first_bit(e, d->seq_len), data); changed = 1; }
+			if (k != --d->nmixed) memcpy(e, pool_entry(d, d->nmixed), d->set_bytes + d->fragment);
+		}
+	}
+}
+static int subset(const uint8_t *a, const uint8_t *b, uint32_t n) /* a within b */
+{
+	for (uint32_t i = 0; i < n; i++) if (a[i] & ~b[i]) return 0;
+	return 1;
+}
+
+int ut_fountain_decoder_init(ut_fountain_decoder *d, uint8_t *work, size_t work_len)
+{
+	memset(d, 0, sizeof *d);
+	d->work = work;
+	d->work_len = work_len;
+	return work ? UT_OK : UT_ERR_ARG;
+}
+
+static int receive_part(ut_fountain_decoder *d, const uint8_t *body, size_t n)
+{
+	uint32_t seq_num, seq_len, len, checksum, f;
+	size_t i = 1;
+	uint8_t set[(UT_MAX_PARTS + 7) / 8], data[UT_MAX_FRAGMENT];
+	if (!n || body[0] != 0x85 || cbor_read(body, n, &i, 0, &seq_num) || cbor_read(body, n, &i, 0, &seq_len) ||
+	    cbor_read(body, n, &i, 0, &len) || cbor_read(body, n, &i, 0, &checksum) || cbor_read(body, n, &i, 2, &f) ||
+	    i + f != n || !seq_num || !seq_len || !f || f > UT_MAX_FRAGMENT || (uint64_t)seq_len * f < len ||
+	    (uint64_t)(seq_len - 1) * f >= len)
+		return UT_ERR_UR;
+	if (seq_len > UT_MAX_PARTS) return UT_ERR_TOO_LONG;
+	if (!d->seq_len) {                    /* the first part: lay out the work memory */
+		size_t sb = (seq_len + 7) / 8, need = (size_t)seq_len * f + sb;
+		if (need + sb + f > d->work_len) return UT_ERR_SPACE;
+		d->seq_len = seq_len; d->len = len; d->checksum = checksum; d->fragment = f; d->set_bytes = (uint32_t)sb;
+		d->msg = d->work;
+		d->known = d->work + (size_t)seq_len * f;
+		memset(d->known, 0, sb);
+		d->pool = d->known + sb;
+		d->max_mixed = (uint32_t)((d->work_len - need) / (sb + f));
+	} else if (seq_len != d->seq_len || len != d->len || checksum != d->checksum || f != d->fragment)
+		return UT_ERR_MESSAGE;
+	if (d->done) return 1;
+	choose(&d->sampler, seq_num, seq_len, checksum, set);
+	memcpy(data, body + i, f);
+	reduce_known(d, set, data);
+	uint32_t c = count_bits(set, d->set_bytes);
+	if (c > 1) {                          /* mixed: take out the mixed parts it contains */
+		for (uint32_t k = 0; k < d->nmixed && c > 1; k++) {
+			uint8_t *e = pool_entry(d, k);
+			if (!memcmp(e, set, d->set_bytes)) { c = 0; break; }  /* had it */
+			if (!subset(e, set, d->set_bytes)) continue;
+			for (uint32_t j = 0; j < d->set_bytes; j++) set[j] &= (uint8_t)~e[j];
+			for (uint32_t j = 0; j < f; j++) data[j] ^= e[d->set_bytes + j];
+			c = count_bits(set, d->set_bytes);
+		}
+	}
+	if (c == 1) learn(d, first_bit(set, seq_len), data);
+	else if (c > 1) {
+		/* mixed parts that contain it get it taken out */
+		for (uint32_t k = 0; k < d->nmixed; k++) {
+			uint8_t *e = pool_entry(d, k);
+			if (!subset(set, e, d->set_bytes)) continue;
+			for (uint32_t j = 0; j < d->set_bytes; j++) e[j] &= (uint8_t)~set[j];
+			for (uint32_t j = 0; j < f; j++) e[d->set_bytes + j] ^= data[j];
+		}
+		if (d->nmixed < d->max_mixed) {   /* else dropped: a later part will do */
+			uint8_t *e = pool_entry(d, d->nmixed++);
+			memcpy(e, set, d->set_bytes);
+			memcpy(e + d->set_bytes, data, f);
+		}
+	}
+	sweep(d);
+	if (d->nknown < d->seq_len) return 0;
+	if (ut_crc32(d->msg, d->len) != d->checksum) { d->seq_len = 0; return UT_ERR_CHECKSUM; }
+	d->done = 1;
+	return 1;
+}
+
+int ut_fountain_receive(ut_fountain_decoder *d, const char *ur)
+{
+	ur_t u;
+	int r = parse_ur(ur, &u);
+	if (r) return r;
+	if (d->type[0] && strcmp(d->type, u.type)) return UT_ERR_MESSAGE;
+	if (strlen(u.type) >= sizeof d->type) return UT_ERR_UR;
+	strcpy(d->type, u.type);
+	if (u.kind == KIND_SINGLE) {
+		if (d->seq_len) return UT_ERR_MESSAGE;
+		if (u.n > d->work_len) return UT_ERR_SPACE;
+		memcpy(d->work, u.body, u.n);
+		d->msg = d->work; d->len = (uint32_t)u.n; d->seq_len = d->nknown = 1; d->done = 1;
+		return 1;
+	}
+	return receive_part(d, u.body, u.n);
+}
+
+int ut_fountain_result(const ut_fountain_decoder *d, const char **type, const uint8_t **msg, size_t *len)
+{
+	if (!d->done) return UT_ERR_ARG;
+	if (type) *type = d->type;
+	*msg = d->msg;
+	*len = d->len;
+	return UT_OK;
+}
+
+/* ---- PSBTs: crypto-psbt and psbt are a CBOR byte string --------------------------- */
+
+int ut_psbt_to_cbor(const uint8_t *psbt, size_t len, uint8_t *out, size_t cap)
+{
+	if (len > UINT32_MAX) return UT_ERR_ARG;
+	if (cap < len + 5) return UT_ERR_SPACE;
+	size_t n = cbor_head(out, 2, (uint32_t)len);
+	memmove(out + n, psbt, len);
+	return (int)(n + len);
+}
+
+int ut_cbor_to_psbt(const uint8_t *cbor, size_t len, const uint8_t **psbt, size_t *psbt_len)
+{
+	size_t i = 0;
+	uint32_t n;
+	if (cbor_read(cbor, len, &i, 2, &n) || i + n != len) return UT_ERR_UR;
+	*psbt = cbor + i;
+	*psbt_len = n;
+	return UT_OK;
+}
+
+/* ---- a signer's public keys: xpubs, descriptors, hdkey and the rest ------------------ */
+
+typedef struct { uint8_t *p; size_t cap, n; int err; } writer;
+static void w_bytes(writer *w, const void *b, size_t n)
+{
+	if (w->n + n > w->cap) { w->err = UT_ERR_SPACE; return; }
+	memcpy(w->p + w->n, b, n);
+	w->n += n;
+}
+static void w_head(writer *w, int major, uint32_t v) { uint8_t h[5]; w_bytes(w, h, cbor_head(h, major, v)); }
+static void w_byte(writer *w, uint8_t b) { w_bytes(w, &b, 1); }
+
+/* tags: the current ones (BCR-2020-006, 403xx) and the older ones */
+enum { T_HDKEY, T_KEYPATH, T_COIN, T_OUTPUT };
+static const uint32_t TAGS[2][4] = {{303, 304, 305, 0}, {40303, 40304, 40305, 40308}};
+static const char *const SCRIPT_NAMES[] = {"sh", "wsh", "pk", "pkh", "wpkh", "combo", "tr", "cosigner"};
+static const uint16_t SCRIPT_TAGS[] = {400, 401, 402, 403, 404, 405, 409, 410};
+
+static void w_hdkey(writer *w, const ut_xpub *k, int current)
+{
+	const uint32_t *t = TAGS[current ? 1 : 0];
+	w_head(w, 6, t[T_HDKEY]);
+	w_head(w, 5, 3 + (k->testnet ? 1 : 0) + (k->depth ? 1 : 0));
+	w_byte(w, 3); w_head(w, 2, 33); w_bytes(w, k->key, 33);
+	w_byte(w, 4); w_head(w, 2, 32); w_bytes(w, k->chain, 32);
+	if (k->testnet) { w_byte(w, 5); w_head(w, 6, t[T_COIN]); w_head(w, 5, 1); w_byte(w, 2); w_byte(w, 1); }
+	w_byte(w, 6); w_head(w, 6, t[T_KEYPATH]); w_head(w, 5, 2);
+	w_byte(w, 1); w_head(w, 4, (uint32_t)(2 * k->depth));
+	for (size_t i = 0; i < k->depth; i++) { w_head(w, 0, k->path[i] & 0x7FFFFFFF); w_byte(w, k->path[i] >> 31 ? 0xF5 : 0xF4); }
+	w_byte(w, 2); w_head(w, 0, k->source_fp);
+	if (k->depth) { w_byte(w, 8); w_head(w, 0, k->parent_fp); }
+}
+
+/* "sh(wpkh(@0))" -> its script functions, outermost first; 0 if not one key's */
+static int script_names(const char *s, uint8_t *idx, int max)
+{
+	int n = 0;
+	while (strncmp(s, "@0", 2)) {
+		int found = -1;
+		for (int i = 0; i < (int)(sizeof SCRIPT_TAGS / sizeof SCRIPT_TAGS[0]); i++) {
+			size_t l = strlen(SCRIPT_NAMES[i]);
+			if (!strncmp(s, SCRIPT_NAMES[i], l) && s[l] == '(') { found = i; s += l + 1; break; }
+		}
+		if (found < 0 || n == max) return 0;
+		idx[n++] = (uint8_t)found;
+	}
+	s += 2;
+	for (int i = 0; i < n; i++) if (*s++ != ')') return 0;
+	return *s ? 0 : n;
+}
+
+static void w_output(writer *w, const char *script, const ut_xpub *k, int current)
+{
+	uint8_t idx[4];
+	int n = script_names(script, idx, 4);
+	if (!n) { w->err = UT_ERR_ARG; return; }
+	if (current) {
+		size_t l = strlen(script);
+		w_head(w, 5, 2);
+		w_byte(w, 1); w_head(w, 3, (uint32_t)l); w_bytes(w, script, l);
+		w_byte(w, 2); w_head(w, 4, 1); w_hdkey(w, k, 1);
+	} else {
+		for (int i = 0; i < n; i++) w_head(w, 6, SCRIPT_TAGS[idx[i]]);
+		w_hdkey(w, k, 0);
+	}
+}
+
+int ut_hdkey_cbor(const ut_xpub *k, int current, uint8_t *out, size_t cap)
+{
+	uint8_t tmp[256];
+	writer w = {tmp, sizeof tmp, 0, 0};
+	w_hdkey(&w, k, current);
+	if (w.err) return w.err;
+	size_t skip = 3;                      /* the UR body is the map: without its tag */
+	if (w.n - skip > cap) return UT_ERR_SPACE;
+	memcpy(out, tmp + skip, w.n - skip);
+	return (int)(w.n - skip);
+}
+
+int ut_output_cbor(const char *script, const ut_xpub *k, int current, uint8_t *out, size_t cap)
+{
+	writer w = {out, cap, 0, 0};
+	w_output(&w, script, k, current);
+	return w.err ? w.err : (int)w.n;
+}
+
+int ut_account_cbor(uint32_t master_fp, const char *const *scripts, const ut_xpub *keys, size_t n,
+                    int current, uint8_t *out, size_t cap)
+{
+	writer w = {out, cap, 0, 0};
+	if (!n || n > 23) return UT_ERR_ARG;
+	w_head(&w, 5, 2);
+	w_byte(&w, 1); w_head(&w, 0, master_fp);
+	w_byte(&w, 2); w_head(&w, 4, (uint32_t)n);
+	for (size_t i = 0; i < n; i++) {
+		if (current) w_head(&w, 6, TAGS[1][T_OUTPUT]);
+		w_output(&w, scripts[i], &keys[i], current);
+	}
+	return w.err ? w.err : (int)w.n;
+}
+
+/* ---- the same keys as text: an xpub (or ypub, zpub…), a descriptor ---------------- */
+
+static const char B58[] = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+static const struct { const char *prefix; uint32_t main, test; } VERSIONS[] = {
+	{"xpub", 0x0488B21E, 0x043587CF}, {"ypub", 0x049D7CB2, 0x044A5262}, {"zpub", 0x04B24746, 0x045F1CF6},
+	{"Ypub", 0x0295B43F, 0x024289EF}, {"Zpub", 0x02AA7ED3, 0x02575483},
+};
+
+int ut_xpub_text(const ut_xpub *k, const char *prefix, char *out, size_t cap)
+{
+	uint8_t d[82], h[32];
+	int v = -1;
+	for (int i = 0; i < 5; i++) if (!strcmp(prefix, VERSIONS[i].prefix)) v = i;
+	if (v < 0 || (k->depth && !k->path)) return UT_ERR_ARG;
+	put_be32(d, k->testnet ? VERSIONS[v].test : VERSIONS[v].main);
+	d[4] = (uint8_t)k->depth;
+	put_be32(d + 5, k->depth ? k->parent_fp : 0);
+	put_be32(d + 9, k->depth ? k->path[k->depth - 1] : 0);
+	memcpy(d + 13, k->chain, 32);
+	memcpy(d + 45, k->key, 33);
+	ut_sha256(d, 78, h); ut_sha256(h, 32, h);
+	memcpy(d + 78, h, 4);
+	/* Base58: 82 bytes, at most 112 digits; repeated division of the big number */
+	char tmp[120];
+	size_t nd = 0, zeros = 0;
+	while (zeros < 82 && !d[zeros]) zeros++;
+	for (size_t start = zeros; start < 82;) {
+		uint32_t rem = 0;
+		for (size_t i = start; i < 82; i++) {
+			uint32_t cur = rem << 8 | d[i];
+			d[i] = (uint8_t)(cur / 58);
+			rem = cur % 58;
+		}
+		tmp[nd++] = B58[rem];
+		while (start < 82 && !d[start]) start++;
+	}
+	if (zeros + nd + 1 > cap) return UT_ERR_SPACE;
+	for (size_t i = 0; i < zeros; i++) out[i] = '1';
+	for (size_t i = 0; i < nd; i++) out[zeros + i] = tmp[nd - 1 - i];
+	out[zeros + nd] = 0;
+	return (int)(zeros + nd);
+}
+
+/* Bitcoin Core's descriptor checksum */
+static void desc_checksum(const char *s, char out[9])
+{
+	static const char INPUT[] = "0123456789()[],'/*abcdefgh@:$%{}IJKLMNOPQRSTUVWXYZ&+-.;<=>?!^_|~ijklmnopqrstuvwxyzABCDEFGH`#\"\\ ";
+	static const char CHARSET[] = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+	static const uint64_t GEN[5] = {0xF5DEE51989, 0xA9FDCA3312, 0x1BAB10E32D, 0x3706B1677A, 0x644D626FFD};
+	uint64_t c = 1;
+	int cls = 0, ncls = 0;
+#define FEED(v) do { uint64_t top = c >> 35; c = (c & 0x7FFFFFFFF) << 5 ^ (uint64_t)(v); \
+	for (int g = 0; g < 5; g++) if (top >> g & 1) c ^= GEN[g]; } while (0)
+	for (; *s; s++) {
+		const char *p = strchr(INPUT, *s);
+		int v = p && *s ? (int)(p - INPUT) : 0;
+		FEED(v & 31);
+		cls = cls * 3 + (v >> 5);
+		if (++ncls == 3) { FEED(cls); cls = ncls = 0; }
+	}
+	if (ncls) FEED(cls);
+	for (int i = 0; i < 8; i++) FEED(0);
+#undef FEED
+	c ^= 1;
+	for (int i = 0; i < 8; i++) out[i] = CHARSET[c >> (5 * (7 - i)) & 31];
+	out[8] = 0;
+}
+
+int ut_descriptor_text(const char *script, const ut_xpub *k, char *out, size_t cap)
+{
+	char key[320], xpub[120];
+	size_t pos = 0, kp = 0;
+	const char *at = strstr(script, "@0");
+	int r;
+	uint8_t idx[4];
+	if (!at || !script_names(script, idx, 4)) return UT_ERR_ARG;
+	if ((r = ut_xpub_text(k, "xpub", xpub, sizeof xpub)) < 0) return r;
+	static const char HEX[] = "0123456789abcdef";
+	key[kp++] = '[';
+	for (int i = 0; i < 8; i++) key[kp++] = HEX[k->source_fp >> (28 - 4 * i) & 15];
+	key[kp] = 0;
+	for (size_t i = 0; i < k->depth; i++) {
+		if ((r = put_str(key, sizeof key, &kp, "/")) || (r = put_uint(key, sizeof key, &kp, k->path[i] & 0x7FFFFFFF))) return r;
+		if (k->path[i] >> 31 && (r = put_str(key, sizeof key, &kp, "'"))) return r;
+	}
+	if ((r = put_str(key, sizeof key, &kp, "]")) || (r = put_str(key, sizeof key, &kp, xpub))) return r;
+	if ((size_t)(at - script) + 1 > cap) return UT_ERR_SPACE;
+	memcpy(out, script, (size_t)(at - script)); pos = (size_t)(at - script); out[pos] = 0;
+	if ((r = put_str(out, cap, &pos, key)) || (r = put_str(out, cap, &pos, at + 2))) return r;
+	char sum[9];
+	desc_checksum(out, sum);
+	if ((r = put_str(out, cap, &pos, "#")) || (r = put_str(out, cap, &pos, sum))) return r;
+	return (int)pos;
+}
+
 /* ---- sine, levels ------------------------------------------------------------- */
 
 /* sin over a quarter turn, Q15 (257 entries) */
