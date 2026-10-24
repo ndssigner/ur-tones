@@ -10,7 +10,23 @@
  * Goertzel, a sine table, IEEE doubles done with integers where UR needs
  * them, and fixed buffers, for CPUs without an FPU (the Nintendo DSi's
  * ARM9, a Raspberry Pi Pico). Checked against the Python reference, the test
- * vectors, ur2's parts and Blockchain Commons' vectors by tests/test_c.py.
+ * vectors, ur2's parts and Blockchain Commons' vectors by tests/test_c*.py.
+ *
+ * Layers, each with its own calls, so a device plugs its hardware in where
+ * it fits and uses the rest:
+ *
+ *   1. samples <-> detections   ut_detector (ADC, I2S, a microphone at any
+ *      rate; ut_classify for one's own DSP), ut_synth (DAC, PWM, I2S)
+ *   2. detections <-> groups    ut_keys: tones, echoes, pauses, keypad mode;
+ *      ut_keys_tone for a DTMF decoder chip (MT8870, HT9170), ut_player for
+ *      a generator chip (HT9200)
+ *   3. groups <-> frames        ut_frame_decode/encode: sync, base 15,
+ *      Reed-Solomon, a lost or extra tone repaired
+ *   4. frames <-> messages      UR texts, seeds and the PIN, fountain codes
+ *      (on frames or on texts), PSBTs, public keys
+ *
+ * ut_listener is layers 1 and 2 together; ut_frame_to_ur and ut_ur_to_frame
+ * are layer 3 with UR text.
  *
  * Configuration: every option below can be set with -D… or, better, in a
  * header of one's own named by -DUT_CONFIG_FILE="my_config.h" (included
@@ -183,6 +199,8 @@ int32_t ut_fountain_encoder_init(ut_fountain_encoder *e, const uint8_t *msg, siz
  * fragment, else the next part ("ur:<type>/<n>-<seq_len>/…"). Each goes in
  * a frame (ut_ur_to_frame). */
 int32_t ut_fountain_next_ur(ut_fountain_encoder *e, const char *type, char *ur, size_t cap);
+/* The same as a frame (ut_frame_encode), with no UR text on the way. */
+int32_t ut_fountain_next_frame(ut_fountain_encoder *e, const char *type, ut_frame *f);
 /* The next part's CBOR: [seqNum, seqLen, messageLen, checksum, fragment]. */
 int32_t ut_fountain_next_part(ut_fountain_encoder *e, uint8_t *out, size_t cap);
 
@@ -205,6 +223,8 @@ int32_t ut_fountain_decoder_init(ut_fountain_decoder *d, uint8_t *work, size_t w
  * more are needed (progress: nknown of seq_len fragments), or an error:
  * UT_ERR_MESSAGE for a part of another message. */
 int32_t ut_fountain_receive(ut_fountain_decoder *d, const char *ur);
+/* The same from a frame (ut_frame_decode); frames and texts may be mixed. */
+int32_t ut_fountain_receive_frame(ut_fountain_decoder *d, const ut_frame *f);
 int32_t ut_fountain_result(const ut_fountain_decoder *d, const char **type, const uint8_t **msg, size_t *len);
 /* The fragments a part carries, as bits of `set` ((seq_len + 7) / 8 bytes).
  * Exposed for tests. `t` keeps the degree table for one seq_len: zero it

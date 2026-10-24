@@ -60,7 +60,16 @@ def build(name, *flags):
     lib.ut_account_cbor.argtypes = [u32, ctypes.POINTER(c_char_p), ctypes.POINTER(XPub), c_size_t, c_int, u8p, c_size_t]
     lib.ut_ur_to_frame.argtypes = [c_char_p, c_char_p, c_size_t]
     lib.ut_frame_to_ur.argtypes = [c_char_p, c_char_p, c_size_t, ctypes.POINTER(c_int)]
+    fp = ctypes.POINTER(Frame)
+    lib.ut_frame_from_ur.argtypes = [c_char_p, fp]
+    lib.ut_frame_ur.argtypes = [fp, c_char_p, c_size_t]
+    lib.ut_fountain_next_frame.argtypes = [ctypes.c_void_p, c_char_p, fp]
+    lib.ut_fountain_receive_frame.argtypes = [ctypes.c_void_p, fp]
     return lib
+
+
+class Frame(ctypes.Structure):
+    _fields_ = [("kind", ctypes.c_uint8), ("type", ctypes.c_char * 219), ("body", ctypes.c_uint8 * 255), ("n", ctypes.c_uint8)]
 
 
 class XPub(ctypes.Structure):
@@ -148,14 +157,33 @@ def encode_urs(lib, type_, msg, fragment, count):
     return urs
 
 
-def decode_urs(lib, urs, work=None):
+def encode_frames(lib, type_, msg, fragment, count):
+    """The same parts as encode_urs, made as frames, shown as UR texts."""
+    enc, keep = ctypes.create_string_buffer(STRUCT), buf(msg)
+    assert lib.ut_fountain_encoder_init(enc, keep, len(msg), fragment) == 0
+    out, f, urs = ctypes.create_string_buffer(1200), Frame(), []
+    for _ in range(count):
+        assert lib.ut_fountain_next_frame(enc, type_.encode(), ctypes.byref(f)) > 0
+        assert lib.ut_frame_ur(ctypes.byref(f), out, 1200) > 0
+        urs.append(out.value.decode())
+    return urs
+
+
+def decode_urs(lib, urs, work=None, frames=lambda k: False):
+    """(the message, how many URs it took) or (None, the last result); frames(k):
+    whether the k-th goes in as a frame (ut_fountain_receive_frame)."""
     """(the message, how many URs it took) or (None, the last result)"""
     dec = ctypes.create_string_buffer(STRUCT)
     w = (ctypes.c_uint8 * (work or 8192))()
     lib.ut_fountain_decoder_init(dec, w, len(w))
     r = 0
+    f = Frame()
     for k, ur in enumerate(urs):
-        r = lib.ut_fountain_receive(dec, ur.encode())
+        if frames(k):
+            assert lib.ut_frame_from_ur(ur.encode(), ctypes.byref(f)) > 0
+            r = lib.ut_fountain_receive_frame(dec, ctypes.byref(f))
+        else:
+            r = lib.ut_fountain_receive(dec, ur.encode())
         if r == 1:
             t, m, n = ctypes.c_char_p(), ctypes.POINTER(ctypes.c_uint8)(), ctypes.c_size_t()
             lib.ut_fountain_result(dec, ctypes.byref(t), ctypes.byref(m), ctypes.byref(n))
@@ -254,6 +282,7 @@ def main():
         type_ = v["urs"][0][3:v["urs"][0].index("/")]
         for name, lib in libs.items():
             check(encode_urs(lib, type_, msg, v["fragment"], len(v["urs"])) == v["urs"], "%s: parts = ur2's: %s" % (name, v["name"]))
+            check(encode_frames(lib, type_, msg, v["fragment"], len(v["urs"])) == v["urs"], "%s: parts as frames = ur2's: %s" % (name, v["name"]))
 
     # decoding: in order, with parts lost, from mixed parts alone; a small message as one UR
     for v in [v for v in VECTORS if v.get("urs") and len(v["urs"]) > 1]:
@@ -262,13 +291,17 @@ def main():
         for name, lib in libs.items():
             got, used, t = decode_urs(lib, v["urs"])
             check(got == msg and t == type_, "%s: decoded in order: %s" % (name, v["name"]))
+            got, _, t = decode_urs(lib, v["urs"], frames=lambda k: True)
+            check(got == msg and t == type_, "%s: decoded from frames: %s" % (name, v["name"]))
+            got, _, t = decode_urs(lib, v["urs"], frames=lambda k: k % 2 == 1)
+            check(got == msg and t == type_, "%s: frames and texts mixed: %s" % (name, v["name"]))
             urs = encode_urs(lib, type_, msg, v["fragment"], 400)
             seq_len = int(urs[0].split("/")[1].split("-")[1])
             for trial in range(20):
                 kept = [u for u in urs if rng.random() > 0.4]
-                got, used, _ = decode_urs(lib, kept)
+                got, used, _ = decode_urs(lib, kept, frames=lambda k: trial % 2 == 1)
                 check(got == msg and used <= 3 * seq_len + 10, "%s: 40%% of parts lost (%s), %s URs" % (name, v["name"], used))
-            got, used, _ = decode_urs(lib, urs[seq_len:])
+            got, used, _ = decode_urs(lib, urs[seq_len:], frames=lambda k: True)
             check(got == msg, "%s: from mixed parts alone (%s), %s URs" % (name, v["name"], used))
             got, r, _ = decode_urs(lib, urs[:1] + encode_urs(lib, type_, msg[:-1] + bytes([msg[-1] ^ 1]), v["fragment"], 3)[1:2])
             check(got is None and r == -10, "%s: a part of another message refused" % name)
@@ -278,6 +311,8 @@ def main():
         small = cbor_bytes(b"\x70\x73\x62\x74\xff" + bytes(40))
         urs = encode_urs(lib, "crypto-psbt", small, 100, 2)
         check(urs[0] == urs[1] and "/1-" not in urs[0] and decode_urs(lib, urs)[0] == small, "%s: a small message is one UR, in a loop" % name)
+        check(encode_frames(lib, "crypto-psbt", small, 100, 1) == urs[:1] and decode_urs(lib, urs, frames=lambda k: True)[0] == small,
+              "%s: a small message as one frame" % name)
         # every part goes in a frame and back
         out, fixed = ctypes.create_string_buffer(1200), ctypes.c_int()
         ok = True

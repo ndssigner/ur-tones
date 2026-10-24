@@ -1020,10 +1020,29 @@ int32_t ut_fountain_next_part(ut_fountain_encoder *e, uint8_t *out, size_t cap)
 	return (int32_t)(n + f);
 }
 
+int32_t ut_fountain_next_frame(ut_fountain_encoder *e, const char *type, ut_frame *f)
+{
+	size_t tl = strlen(type);
+	int32_t n;
+	if (tl > UT_MAX_TYPE) return UT_ERR_TOO_LONG;
+	memcpy(f->type, type, tl + 1);
+	if (e->seq_len == 1) {
+		if (e->len > sizeof f->body) return UT_ERR_TOO_LONG;
+		memcpy(f->body, e->msg, e->len);
+		f->kind = KIND_SINGLE;
+		f->n = (uint8_t)e->len;
+		return f->n;
+	}
+	if ((n = ut_fountain_next_part(e, f->body, sizeof f->body)) < 0) return n;
+	f->kind = KIND_PART;
+	f->n = (uint8_t)n;
+	return n;
+}
+
 int32_t ut_fountain_next_ur(ut_fountain_encoder *e, const char *type, char *ur, size_t cap)
 {
 	uint8_t body[UT_MAX_FRAGMENT + 32];
-	int n;
+	int32_t n;
 	if (e->seq_len == 1) return ur_text(type, KIND_SINGLE, e->msg, e->len, ur, cap);
 	if ((n = ut_fountain_next_part(e, body, sizeof body)) < 0) return n;
 	return ur_text(type, KIND_PART, body, (size_t)n, ur, cap);
@@ -1151,22 +1170,32 @@ static int receive_part(ut_fountain_decoder *d, const uint8_t *body, size_t n)
 	return 1;
 }
 
+static int32_t receive(ut_fountain_decoder *d, const char *type, int kind, const uint8_t *body, size_t n)
+{
+	if (d->type[0] && strcmp(d->type, type)) return UT_ERR_MESSAGE;
+	if (strlen(type) >= sizeof d->type) return UT_ERR_UR;
+	strcpy(d->type, type);
+	if (kind == KIND_SINGLE) {
+		if (d->seq_len) return UT_ERR_MESSAGE;
+		if (n > d->work_len) return UT_ERR_SPACE;
+		memcpy(d->work, body, n);
+		d->msg = d->work; d->len = (uint32_t)n; d->seq_len = d->nknown = 1; d->done = 1;
+		return 1;
+	}
+	return receive_part(d, body, n);
+}
+
 int32_t ut_fountain_receive(ut_fountain_decoder *d, const char *ur)
 {
 	ur_t u;
 	int r = parse_ur(ur, &u);
 	if (r) return r;
-	if (d->type[0] && strcmp(d->type, u.type)) return UT_ERR_MESSAGE;
-	if (strlen(u.type) >= sizeof d->type) return UT_ERR_UR;
-	strcpy(d->type, u.type);
-	if (u.kind == KIND_SINGLE) {
-		if (d->seq_len) return UT_ERR_MESSAGE;
-		if (u.n > d->work_len) return UT_ERR_SPACE;
-		memcpy(d->work, u.body, u.n);
-		d->msg = d->work; d->len = (uint32_t)u.n; d->seq_len = d->nknown = 1; d->done = 1;
-		return 1;
-	}
-	return receive_part(d, u.body, u.n);
+	return receive(d, u.type, u.kind, u.body, u.n);
+}
+
+int32_t ut_fountain_receive_frame(ut_fountain_decoder *d, const ut_frame *f)
+{
+	return receive(d, f->type, f->kind, f->body, f->n);
 }
 
 int32_t ut_fountain_result(const ut_fountain_decoder *d, const char **type, const uint8_t **msg, size_t *len)
