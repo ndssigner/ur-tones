@@ -1680,14 +1680,14 @@ static UT_HOT void detect(ut_detector *d, ut_det *out)
 	int64_t power[8] = {0};
 	uint32_t n = d->n;
 	for (uint32_t i = 0; i < n; i++) {
-		int32_t x = d->ring[(d->next + i) % UT_RING];
+		int32_t x = d->ring[(d->pos + i) % UT_RING];
 		total += (uint64_t)((int64_t)x * x);
 	}
 	if (total >= (uint64_t)3395 * n)       /* not silence: worth the eight filters */
 		for (int f = 0; f < 8; f++) {
 			int64_t s1 = 0, s2 = 0, c = d->coeff[f];       /* cos(w), Q15 */
 			for (uint32_t i = 0; i < n; i++) {
-				int64_t s0 = d->ring[(d->next + i) % UT_RING] + ((2 * c * s1) >> 15) - s2;
+				int64_t s0 = d->ring[(d->pos + i) % UT_RING] + ((2 * c * s1) >> 15) - s2;
 				s2 = s1; s1 = s0;
 			}
 			power[f] = s1 * s1 + s2 * s2 - ((2 * c * s1) >> 15) * s2;    /* |X|^2 */
@@ -1702,13 +1702,13 @@ size_t ut_detector_push(ut_detector *d, const int16_t *x, size_t n, size_t *used
 	for (; i < n && k < cap; i++) {
 		d->dec_sum += x[i];
 		if (++d->dec_count < d->dec) continue;
-		d->ring[d->total % UT_RING] = (int16_t)(d->dec_sum / (int32_t)d->dec);
+		d->ring[(d->pos + d->fill) % UT_RING] = (int16_t)(d->dec_sum / (int32_t)d->dec);
 		d->dec_sum = 0;
 		d->dec_count = 0;
-		d->total++;
-		if (d->total >= d->next + d->n) {
+		if (++d->fill == d->n) {          /* a window: from pos, n samples */
 			detect(d, &out[k++]);
-			d->next += d->hop;
+			d->pos = (d->pos + d->hop) % UT_RING;
+			d->fill -= d->hop;
 		}
 	}
 	if (used) *used = i;

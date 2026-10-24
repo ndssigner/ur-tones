@@ -261,6 +261,12 @@ def test_detector():
     check(len(dets) == (len(pcm) - 200) // 80 + 1, "one detection per hop: %d" % len(dets))
     heard = "".join(k for i, k in enumerate(dets) if k and (i == 0 or dets[i - 1] != k))
     check(heard == frame, "detections follow the frame's keys")
+    # windows anywhere in the ring, whatever its size: no counter that grows with time
+    for ring in (1024, 1000, 560):
+        exe = ROOT / "build" / "wrap"
+        subprocess.run(["cc", "-std=c99", "-Wall", "-DUT_RING=%d" % ring, str(ROOT / "tests" / "c" / "wrap.c"), "-o", str(exe)], check=True)
+        r = subprocess.run([str(exe)], capture_output=True, text=True)
+        check(r.returncode == 0, "windows across the ring's end, UT_RING=%d: %s" % (ring, r.stdout.strip()))
 
 
 # ---- layer 2: keys, from detections ---------------------------------------------

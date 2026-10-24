@@ -362,7 +362,8 @@ typedef struct {
 	int32_t dec_sum;
 	uint32_t dec_count;
 	int16_t ring[UT_RING];
-	uint32_t total, next;     /* samples kept; start of the next window */
+	uint32_t pos, fill;       /* the next window's start in ring; samples since (no
+	                             counter grows: days of listening never wrap) */
 	int level;                /* the last window's level, as ut_det's */
 } ut_detector;
 
