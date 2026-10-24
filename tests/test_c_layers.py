@@ -56,8 +56,10 @@ STRUCT = 64 * 1024  # bigger than any of the library's structs; opaque here
 def declare(lib):
     lib.ut_ur_to_frame.argtypes = [c_char_p, c_char_p, c_size_t]
     lib.ut_frame_to_ur.argtypes = [c_char_p, c_char_p, c_size_t, ctypes.POINTER(c_int)]
-    lib.ut_keypad_to_seed.argtypes = [c_char_p, c_char_p, u8p]
-    lib.ut_ur_to_seed.argtypes = [c_char_p, c_char_p, u8p]
+    if hasattr(lib, "ut_keypad_to_seed"):
+        lib.ut_keypad_to_seed.argtypes = [c_char_p, c_char_p, u8p]
+    if hasattr(lib, "ut_ur_to_seed"):
+        lib.ut_ur_to_seed.argtypes = [c_char_p, c_char_p, u8p]
     if hasattr(lib, "ut_synth_init"):
         lib.ut_synth_init.argtypes = [ctypes.c_void_p, c_char_p] + [ctypes.c_uint32] * 4
         lib.ut_synth_read.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int16), c_size_t]
@@ -570,8 +572,47 @@ def test_hooks():
             check(calls.value == pins, "PBKDF2 called once per PIN: %d for %d" % (calls.value, pins))
 
 
+# ---- switches: leave parts out -------------------------------------------------------
+
+def symbols(lib_path):
+    out = subprocess.run(["nm", "-g", str(lib_path)], capture_output=True, text=True, check=True).stdout
+    return {l.split()[-1].lstrip("_") for l in out.splitlines() if " T " in l}
+
+
+SWITCHES = {   # what each switch leaves out: names, or prefixes ending in "_"
+    "UT_NO_AUDIO": ["ut_synth_", "ut_detector_", "ut_classify", "ut_listener_"],
+    "UT_NO_KEYPAD": ["ut_seed_to_keypad", "ut_keypad_to_seed"],
+    "UT_NO_SEED": ["ut_seed_to_keypad", "ut_keypad_to_seed", "ut_seed_to_ur", "ut_ur_to_seed", "ut_pbkdf2_sha256"],
+    "UT_NO_FOUNTAIN": ["ut_fountain_", "ut_psbt_to_cbor", "ut_cbor_to_psbt"],
+    "UT_NO_KEYS": ["ut_xpub_text", "ut_descriptor_text", "ut_hdkey_cbor", "ut_output_cbor", "ut_account_cbor"],
+}
+
+
+def left_out(names, combo):
+    pats = [p for c in combo for p in SWITCHES[c]] + (["ut_sha256"] if len(combo) == 3 else [])
+    return {n for n in names if any(n.startswith(p) if p.endswith("_") else n == p for p in pats)}
+
+
+def test_switches():
+    full = symbols(ROOT / "build" / ("ut_layers" + (".dylib" if sys.platform == "darwin" else ".so")))
+    for combo in [[s] for s in SWITCHES] + [["UT_NO_SEED", "UT_NO_FOUNTAIN", "UT_NO_KEYS"]]:
+        name = "ut_" + "_".join(c[6:].lower() for c in combo)
+        lib = build(name, *("-D%s=1" % c for c in combo))
+        have = symbols(ROOT / "build" / (name + (".dylib" if sys.platform == "darwin" else ".so")))
+        gone = left_out(full, combo)
+        check(gone and not (gone & have), "%s: left out %s" % (combo, sorted(gone & have)))
+        check(full - gone <= have, "%s: the rest stays %s" % (combo, sorted(full - gone - have)))
+        check(frames_round_trip(lib), "%s: frames round trip" % combo)
+    lib = build("ut_no_keypad", "-DUT_NO_KEYPAD=1")
+    declare_keys(lib)
+    lib.ut_keys_tone.argtypes = [ctypes.c_void_p, ctypes.c_char, ctypes.c_uint32, ctypes.c_uint32]
+    lib.ut_keys_time.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    check(events(lib, [("*", 0, 80), ("1", 400, 480), ("#", 800, 880)])[0] == ["*", "1", "#"],
+          "UT_NO_KEYPAD: a * group splits on pauses like any other")
+
+
 TESTS = [test_config, test_globals, test_unsigned_char, test_int32_results, test_detector, test_keys_from_detections,
-         test_tone_events, test_player, test_frames, test_hooks]
+         test_tone_events, test_player, test_frames, test_hooks, test_switches]
 
 
 def main():

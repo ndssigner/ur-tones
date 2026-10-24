@@ -70,6 +70,27 @@ extern "C" {
 #ifndef UT_RING
 #define UT_RING 1024          /* samples (at ~8 kHz) the receiver keeps: 2 B each */
 #endif
+/* Switches: 1 leaves a part out (code, tables and calls). */
+#ifndef UT_NO_AUDIO
+#define UT_NO_AUDIO 0         /* layer 1: detector, synthesis, ut_listener (a DTMF chip does it) */
+#endif
+#ifndef UT_NO_SEED
+#define UT_NO_SEED 0          /* seeds, the seed PIN (PBKDF2) and keypad mode */
+#endif
+#ifndef UT_NO_KEYPAD
+#define UT_NO_KEYPAD 0        /* keypad mode: its grouping rules, seeds as keypad digits */
+#endif
+#if UT_NO_SEED && !UT_NO_KEYPAD
+#undef UT_NO_KEYPAD
+#define UT_NO_KEYPAD 1        /* keypad mode carries seeds only */
+#endif
+#ifndef UT_NO_FOUNTAIN
+#define UT_NO_FOUNTAIN 0      /* multi-part URs (both ways), PSBTs as CBOR */
+#endif
+#ifndef UT_NO_KEYS
+#define UT_NO_KEYS 0          /* a signer's public keys: xpubs, descriptors, their URs */
+#endif
+#define UT_HAVE_SHA256 (!UT_NO_SEED || !UT_NO_FOUNTAIN || !UT_NO_KEYS)
 /* Placement: UT_ROM on constant tables, read through UT_ROM_U8/U16/U32 (on
  * AVR: PROGMEM and pgm_read_byte/word/dword); UT_HOT on the hot loops (on
  * the RP2040/RP2350: a .time_critical section, run from RAM). */
@@ -170,15 +191,21 @@ int32_t ut_ur_to_frame(const char *ur, char *tones, size_t cap);
  * number of bytes repaired. */
 int32_t ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected);
 
+#if !UT_NO_SEED
 /* ---- seeds ---------------------------------------------------------------
  * entropy: 16 or 32 bytes. pin: NULL or "" for none, else letters and
  * digits (case-insensitive). */
+#if !UT_NO_KEYPAD
 int32_t ut_seed_to_keypad(const uint8_t *entropy, size_t len, const char *pin, char *out, size_t cap);
 /* Returns the entropy's length (16 or 32) written to `entropy` (32 bytes). */
 int32_t ut_keypad_to_seed(const char *tones, const char *pin, uint8_t *entropy);
+#endif
 int32_t ut_seed_to_ur(const uint8_t *entropy, size_t len, const char *pin, char *ur, size_t cap);
 int32_t ut_ur_to_seed(const char *ur, const char *pin, uint8_t *entropy);
 
+#endif /* !UT_NO_SEED */
+
+#if !UT_NO_FOUNTAIN
 /* ---- multi-part URs: UR's fountain codes (BCR-2020-005), as ur2 ----------
  * A message (a UR's CBOR, e.g. a PSBT's) longer than one fragment goes as
  * parts in a loop: the first seq_len are its fragments, the rest mix
@@ -245,6 +272,9 @@ int32_t ut_psbt_to_cbor(const uint8_t *psbt, size_t len, uint8_t *out, size_t ca
 /* *psbt points into cbor. */
 int32_t ut_cbor_to_psbt(const uint8_t *cbor, size_t len, const uint8_t **psbt, size_t *psbt_len);
 
+#endif /* !UT_NO_FOUNTAIN */
+
+#if !UT_NO_KEYS
 /* ---- a signer's public keys ------------------------------------------------
  * An account's extended public key, which the signer derives (BIP-32): out
  * as xpub text (or ypub, zpub, Ypub, Zpub: SLIP-132), as a descriptor with
@@ -272,6 +302,9 @@ int32_t ut_output_cbor(const char *script, const ut_xpub *k, int current, uint8_
 int32_t ut_account_cbor(uint32_t master_fp, const char *const *scripts, const ut_xpub *keys, size_t n,
                         int current, uint8_t *out, size_t cap);
 
+#endif /* !UT_NO_KEYS */
+
+#if !UT_NO_AUDIO
 /* ---- synthesis -------------------------------------------------------- */
 
 typedef struct {
@@ -288,6 +321,8 @@ void ut_synth_init(ut_synth *s, const char *tones, uint32_t rate,
                    uint32_t tone_ms, uint32_t gap_ms, uint32_t pause_ms);
 /* Writes up to n samples; returns how many (0: done). */
 size_t ut_synth_read(ut_synth *s, int16_t *out, size_t n);
+
+#endif /* !UT_NO_AUDIO */
 
 /* ---- sending through a DTMF generator chip (HT9200…) ---------------------
  * The same timing as ut_synth, as steps: a key (0: silence) held for on_ms,
@@ -308,17 +343,18 @@ void ut_player_init(ut_player *p, const char *tones, const ut_timing *t);
  * final pause (key 0). Returns 1, or 0 when done. */
 int32_t ut_player_next(ut_player *p, char *key, uint32_t *on_ms, uint32_t *off_ms);
 
+typedef struct {
+	char key;                 /* 0-9 A-D * #, or 0: none */
+	int16_t level;            /* the tone's level in 0.1 dBFS; -990: silence */
+} ut_det;
+
+#if !UT_NO_AUDIO
 /* ---- layer 1 · samples to detections (SPEC appendix A) -------------------
  * Every 10 ms, the eight DTMF frequencies over the last 25 ms (Goertzel, in
  * integers, after bringing the rate down to about 8 kHz): one detection, a
  * key or none, and the tone's level. A device with its own DSP (CMSIS-DSP,
  * an FFT, a vector unit) can compute the eight powers itself and call
  * ut_classify, so that every receiver decides the same way. */
-
-typedef struct {
-	char key;                 /* 0-9 A-D * #, or 0: none */
-	int16_t level;            /* the tone's level in 0.1 dBFS; -990: silence */
-} ut_det;
 
 typedef struct {
 	uint32_t rate, dec, srate, n, hop;
@@ -340,6 +376,8 @@ void ut_detector_tick(const ut_detector *d, uint32_t *num, uint32_t *den);
  * n-sample window of 16-bit samples (low group 697-941 Hz, then high group
  * 1209-1633 Hz) and the window's energy (the sum of its samples squared). */
 void ut_classify(const int64_t power[8], uint64_t energy, uint32_t n, char *key, int16_t *level);
+
+#endif /* !UT_NO_AUDIO */
 
 /* ---- layer 2 · detections to groups of keys (SPEC appendix A) ------------
  * A tone is one key for at least 30 ms; a key that drops out for up to 30 ms
@@ -391,6 +429,7 @@ int32_t ut_keys_group(ut_keys *k, char *out, size_t cap);
 /* Keys since the last call, as they come (a rough, immediate view). */
 int32_t ut_keys_live(ut_keys *k, char *out, size_t cap);
 
+#if !UT_NO_AUDIO
 /* ---- listening: layers 1 and 2 together ---------------------------------- */
 
 typedef struct {
@@ -409,10 +448,16 @@ int32_t ut_listener_group(ut_listener *l, char *out, size_t cap);
 /* Keys heard since the last call, as they come (a rough, immediate view). */
 int32_t ut_listener_live(ut_listener *l, char *out, size_t cap);
 
+#endif /* !UT_NO_AUDIO */
+
 /* ---- building blocks, exposed for tests ---------------------------------- */
+#if UT_HAVE_SHA256
 void ut_sha256(const uint8_t *data, size_t len, uint8_t out[32]);
+#endif
+#if !UT_NO_SEED
 void ut_pbkdf2_sha256(const uint8_t *pw, size_t pwlen, const uint8_t *salt, size_t saltlen,
                       uint32_t iterations, uint8_t *out, size_t outlen);
+#endif
 uint32_t ut_crc32(const uint8_t *data, size_t len);
 /* Corrects up to nsym / 2 wrong bytes in place; returns how many, or UT_ERR_DECODE. */
 int32_t ut_rs_correct(uint8_t *codeword, size_t n, size_t nsym);

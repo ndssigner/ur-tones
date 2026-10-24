@@ -10,9 +10,11 @@
 #include <string.h>
 
 static const char KEYS[] = "0123456789ABCD*#";
+#if !UT_NO_AUDIO
 static const char PAD[4][5] = {"123A", "456B", "789C", "*0#D"};
 static const uint16_t LOW[4] = {697, 770, 852, 941};
 static const uint16_t HIGH[4] = {1209, 1336, 1477, 1633};
+#endif
 static const char LEAD[] = "CB", SYNC[] = "AD";
 static const char *const UR_TYPES[] = {"", "crypto-psbt", "psbt", "crypto-seed", "seed", "crypto-account",
 	"account-descriptor", "crypto-output", "output-descriptor", "bytes", "crypto-hdkey", "hdkey"};
@@ -29,6 +31,7 @@ static int key_index(char k)
 	return -1;
 }
 
+#if UT_HAVE_SHA256
 /* ---- SHA-256, HMAC, PBKDF2 ---------------------------------------------- */
 
 #ifdef UT_SHA256_BLOCK
@@ -121,6 +124,9 @@ void ut_sha256(const uint8_t *data, size_t len, uint8_t out[32])
 	sha256_final(&c, out);
 }
 
+#endif /* UT_HAVE_SHA256 */
+
+#if !UT_NO_SEED
 #ifdef UT_PBKDF2_SHA256
 void UT_PBKDF2_SHA256(const uint8_t *pw, size_t pwlen, const uint8_t *salt, size_t saltlen,
                       uint32_t iterations, uint8_t *out, size_t outlen);
@@ -200,6 +206,8 @@ static int pin_xor(uint8_t *entropy, size_t len, const char *pin)
 	for (size_t i = 0; i < len; i++) entropy[i] ^= key[i];
 	return UT_OK;
 }
+
+#endif /* !UT_NO_SEED */
 
 /* ---- CRC-32 (as zlib's) --------------------------------------------------- */
 
@@ -406,8 +414,13 @@ static int put_bytewords(const uint8_t *data, size_t n, char *out, size_t cap)
 	return (int)(2 * (n + 4));
 }
 
+#if !UT_NO_FOUNTAIN || !UT_NO_KEYS
+static void put_be32(uint8_t *p, uint32_t v) { for (int i = 0; i < 4; i++) p[i] = (uint8_t)(v >> (24 - 8 * i)); }
+#endif
+
 /* ---- tiny CBOR ---------------------------------------------------------------- */
 
+#if UT_HAVE_SHA256          /* seeds, multi-part and keys write CBOR */
 static size_t cbor_head(uint8_t *p, int major, uint32_t v)
 {
 	if (v < 24) { p[0] = (uint8_t)(major << 5 | v); return 1; }
@@ -417,6 +430,8 @@ static size_t cbor_head(uint8_t *p, int major, uint32_t v)
 	for (int i = 0; i < 4; i++) p[1 + i] = (uint8_t)(v >> (24 - 8 * i));
 	return 5;
 }
+
+#endif
 
 static int cbor_read(const uint8_t *p, size_t n, size_t *i, int major, uint32_t *v)
 {
@@ -720,8 +735,10 @@ int32_t ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected)
 	return r;
 }
 
+#if !UT_NO_SEED
 /* ---- seeds ---------------------------------------------------------------------- */
 
+#if !UT_NO_KEYPAD
 static void indices(const uint8_t *e, size_t len, uint16_t *idx)
 {
 	uint8_t h[32];
@@ -787,6 +804,8 @@ int32_t ut_keypad_to_seed(const char *tones, const char *pin, uint8_t *entropy)
 	return r ? r : (int32_t)elen;
 }
 
+#endif /* !UT_NO_KEYPAD */
+
 int32_t ut_seed_to_ur(const uint8_t *entropy, size_t len, const char *pin, char *ur, size_t cap)
 {
 	uint8_t body[36];
@@ -819,6 +838,9 @@ int32_t ut_ur_to_seed(const char *ur, const char *pin, uint8_t *entropy)
 	return r ? r : (int32_t)len;
 }
 
+#endif /* !UT_NO_SEED */
+
+#if !UT_NO_FOUNTAIN
 /* ---- IEEE 754 doubles, for UR's fountain codes ---------------------------------
  * ur2 (and every UR library) picks a mixed part's fragments with doubles: a
  * receiver must make the very same roundings. By default they are made here
@@ -959,7 +981,6 @@ static void sampler_build(ut_sampler *t, uint32_t n)
 	t->n = n;
 }
 
-static void put_be32(uint8_t *p, uint32_t v) { for (int i = 0; i < 4; i++) p[i] = (uint8_t)(v >> (24 - 8 * i)); }
 
 /* the fragments a part carries, as bits of `set` (seq_len bits) */
 static void choose(ut_sampler *t, uint32_t seq_num, uint32_t seq_len, uint32_t checksum, uint8_t *set)
@@ -1250,6 +1271,9 @@ int32_t ut_cbor_to_psbt(const uint8_t *cbor, size_t len, const uint8_t **psbt, s
 	return UT_OK;
 }
 
+#endif /* !UT_NO_FOUNTAIN */
+
+#if !UT_NO_KEYS
 /* ---- a signer's public keys: xpubs, descriptors, hdkey and the rest ------------------ */
 
 typedef struct { uint8_t *p; size_t cap, n; int err; } writer;
@@ -1446,6 +1470,9 @@ int32_t ut_descriptor_text(const char *script, const ut_xpub *k, char *out, size
 	return (int32_t)pos;
 }
 
+#endif /* !UT_NO_KEYS */
+
+#if !UT_NO_AUDIO
 /* ---- sine, levels ------------------------------------------------------------- */
 
 /* sin over a quarter turn, Q15 (257 entries) */
@@ -1562,6 +1589,8 @@ UT_HOT size_t ut_synth_read(ut_synth *s, int16_t *out, size_t n)
 	return w;
 }
 
+#endif /* !UT_NO_AUDIO */
+
 /* ---- the same timing as steps, for a generator chip --------------------------- */
 
 void ut_player_init(ut_player *p, const char *tones, const ut_timing *t)
@@ -1595,6 +1624,7 @@ int32_t ut_player_next(ut_player *p, char *key, uint32_t *on_ms, uint32_t *off_m
 	}
 }
 
+#if !UT_NO_AUDIO
 /* ---- listening (SPEC appendix A) ------------------------------------------------ */
 
 void ut_detector_init(ut_detector *d, uint32_t rate)
@@ -1685,6 +1715,8 @@ size_t ut_detector_push(ut_detector *d, const int16_t *x, size_t n, size_t *used
 	return k;
 }
 
+#endif /* !UT_NO_AUDIO */
+
 /* ---- layer 2: detections to groups --------------------------------------------- */
 
 void ut_keys_init(ut_keys *k, uint32_t tick_num, uint32_t tick_den)
@@ -1706,7 +1738,7 @@ static void group_close(ut_keys *k)
 	uint32_t n = k->clen;
 	k->clen = 0;
 	if (!n) return;
-	if (g[0] != '*') {          /* in a data frame a tone never follows itself: a repeat is an echo */
+	if (UT_NO_KEYPAD || g[0] != '*') {   /* in a data frame a tone never follows itself: a repeat is an echo */
 		uint32_t w = 1;
 		for (uint32_t i = 1; i < n; i++)
 			if (g[i] != g[w - 1]) g[w++] = g[i];
@@ -1724,7 +1756,7 @@ static void group_close(ut_keys *k)
 
 static int keypad_open(const ut_keys *k)
 {
-	if (!k->clen || k->current[0] != '*') return 0;
+	if (UT_NO_KEYPAD || !k->clen || k->current[0] != '*') return 0;
 	for (uint32_t i = 1; i < k->clen; i++)
 		if (k->current[i] < '0' || k->current[i] > '9') return 0;
 	return 1;
@@ -1739,7 +1771,7 @@ static void tone(ut_keys *k, char key, uint32_t start, uint32_t end)
 	if (k->clen < UT_GROUP) k->current[k->clen++] = key;
 	k->last_end = end;
 	k->have_end = 1;
-	if (key == '#' && k->current[0] == '*' && k->clen > 2) {
+	if (!UT_NO_KEYPAD && key == '#' && k->current[0] == '*' && k->clen > 2) {
 		int digits = 1;
 		for (uint32_t i = 1; i + 1 < k->clen; i++)
 			if (k->current[i] < '0' || k->current[i] > '9') digits = 0;
@@ -1879,6 +1911,7 @@ int32_t ut_keys_live(ut_keys *k, char *out, size_t cap)
 	return (int32_t)n;
 }
 
+#if !UT_NO_AUDIO
 /* ---- listening: layers 1 and 2 together -------------------------------------- */
 
 void ut_listener_init(ut_listener *l, uint32_t rate)
@@ -1907,3 +1940,4 @@ void ut_listener_push(ut_listener *l, const int16_t *x, size_t n)
 void ut_listener_flush(ut_listener *l) { ut_keys_flush(&l->keys); }
 int32_t ut_listener_group(ut_listener *l, char *out, size_t cap) { return ut_keys_group(&l->keys, out, cap); }
 int32_t ut_listener_live(ut_listener *l, char *out, size_t cap) { return ut_keys_live(&l->keys, out, cap); }
+#endif /* !UT_NO_AUDIO */

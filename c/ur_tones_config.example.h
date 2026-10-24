@@ -88,3 +88,29 @@
  *                  uint32_t iterations, uint8_t *out, size_t outlen);
  *   #define UT_PBKDF2_SHA256 my_pbkdf2
  */
+
+/* ---- switches: leave parts out (1) ------------------------------------------- */
+
+/* Layer 1: the detector, ut_classify, the synthesiser and ut_listener, with
+ * the sine table. For a device whose DTMF decoder and generator are chips
+ * (ut_keys_tone, ut_player stay). */
+/* #define UT_NO_AUDIO 1 */
+
+/* Seeds: crypto-seed/seed URs, the seed PIN (PBKDF2, HMAC) and keypad mode. */
+/* #define UT_NO_SEED 1 */
+
+/* Keypad mode alone: its grouping rules ("*" digits "#" across pauses) and
+ * seeds as keypad digits. Implied by UT_NO_SEED. */
+/* #define UT_NO_KEYPAD 1 */
+
+/* Multi-part URs (fountain codes, both ways, and the IEEE doubles they need)
+ * and PSBTs as CBOR: a device that only sends and receives single frames. */
+/* #define UT_NO_FOUNTAIN 1 */
+
+/* A signer's public keys: xpub text, descriptors, hdkey, output and account
+ * descriptor URs. */
+/* #define UT_NO_KEYS 1 */
+
+/* With UT_NO_SEED, UT_NO_FOUNTAIN and UT_NO_KEYS together SHA-256 is left out
+ * too: what remains is frames (any UR's bytes) and, unless UT_NO_AUDIO, the
+ * audio layers. */
