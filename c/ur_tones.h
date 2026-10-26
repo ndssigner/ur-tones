@@ -117,7 +117,9 @@ extern "C" {
  *   UT_PBKDF2_SHA256  the name of a function with ut_pbkdf2_sha256's
  *                     signature that replaces it whole (an accelerator that
  *                     cannot load a state, or mbedTLS/wolfSSL already in the
- *                     firmware). */
+ *                     firmware).
+ * A hook sees the PIN and its key: it must clear its own buffers and the
+ * accelerator's registers, as the portable code does. */
 
 /* ---- protocol limits (SPEC.md; not options) ---- */
 #define UT_PARITY 32          /* Reed-Solomon parity bytes per frame */
@@ -194,7 +196,13 @@ int32_t ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected);
 #if !UT_NO_SEED
 /* ---- seeds ---------------------------------------------------------------
  * entropy: 16 or 32 bytes. pin: NULL or "" for none, else letters and
- * digits (case-insensitive). */
+ * digits (case-insensitive).
+ * Secrets: these calls, and the frame calls that carry a seed, clear every
+ * copy they make of the entropy, the PIN and its key before they return,
+ * errors included (tests/c/wipe.c). What stays is the caller's: the entropy
+ * and the PIN it passes, what it gets back (on an error, `entropy` is
+ * cleared), a ut_frame it holds, and the tones a ut_listener or ut_keys
+ * heard (ut_listener_init or ut_keys_init clears them). */
 #if !UT_NO_KEYPAD
 int32_t ut_seed_to_keypad(const uint8_t *entropy, size_t len, const char *pin, char *out, size_t cap);
 /* Returns the entropy's length (16 or 32) written to `entropy` (32 bytes). */

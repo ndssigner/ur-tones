@@ -586,6 +586,20 @@ def test_hooks():
             check(calls.value == pins, "PBKDF2 called once per PIN: %d for %d" % (calls.value, pins))
 
 
+def test_wipe():
+    """No copy of a seed, a PIN or its key left on the stack (tests/c/wipe.c)."""
+    exe = ROOT / "build" / "ut_wipe"
+    seeds = [v for v in VECTORS if v.get("pin") and "keypad" in v]
+    for opt in ("-O0", "-O2", "-Os"):
+        subprocess.run([*CFLAGS[:-1], opt, "-I", str(ROOT / "c"), str(ROOT / "tests" / "c" / "wipe.c"),
+                        str(ROOT / "c" / "ur_tones.c"), "-o", str(exe)], check=True)
+        for v in seeds[:1] + seeds[-1:]:
+            for pin in (v["pin"], "Abc123"):
+                r = subprocess.run([str(exe), v["entropy"], pin], capture_output=True, text=True)
+                check(r.returncode == 0 and r.stdout.endswith("checked 15\n"),
+                      "%s, %d-byte seed, PIN %s: %s" % (opt, len(v["entropy"]) // 2, pin, r.stdout.strip()))
+
+
 # ---- switches: leave parts out -------------------------------------------------------
 
 def symbols(lib_path):
@@ -626,7 +640,7 @@ def test_switches():
 
 
 TESTS = [test_config, test_globals, test_unsigned_char, test_int32_results, test_detector, test_keys_from_detections,
-         test_tone_events, test_player, test_frames, test_hooks, test_switches]
+         test_tone_events, test_player, test_frames, test_hooks, test_wipe, test_switches]
 
 
 def main():

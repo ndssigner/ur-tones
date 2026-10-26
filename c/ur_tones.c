@@ -31,6 +31,15 @@ static int key_index(char k)
 	return -1;
 }
 
+/* Clears a secret (a seed, a PIN, what is derived from them) through a
+ * volatile pointer: a plain memset before a buffer goes out of scope is a
+ * store nobody reads, and compilers drop it. */
+static void wipe(void *p, size_t n)
+{
+	volatile uint8_t *v = (volatile uint8_t *)p;
+	while (n--) *v++ = 0;
+}
+
 #if UT_HAVE_SHA256
 /* ---- SHA-256, HMAC, PBKDF2 ---------------------------------------------- */
 
@@ -77,6 +86,7 @@ static UT_HOT void sha256_block(sha256_ctx *c, const uint8_t *p)
 		h = g; g = f; f = e; e = d + t1; d = cc; cc = b; b = a; a = t1 + t2;
 	}
 	c->h[0] += a; c->h[1] += b; c->h[2] += cc; c->h[3] += d; c->h[4] += e; c->h[5] += f; c->h[6] += g; c->h[7] += h;
+	for (int i = 0; i < 64; i++) ((volatile uint32_t *)w)[i] = 0;   /* the schedule holds the block */
 }
 
 #endif
@@ -122,6 +132,7 @@ void ut_sha256(const uint8_t *data, size_t len, uint8_t out[32])
 	sha256_init(&c);
 	sha256_update(&c, data, len);
 	sha256_final(&c, out);
+	wipe(&c, sizeof c);
 }
 
 #endif /* UT_HAVE_SHA256 */
@@ -137,8 +148,9 @@ void ut_pbkdf2_sha256(const uint8_t *pw, size_t pwlen, const uint8_t *salt, size
 	UT_PBKDF2_SHA256(pw, pwlen, salt, saltlen, iterations, out, outlen);
 }
 #else
-/* HMAC-SHA256 with the inner and outer states prepared once (PBKDF2 reuses them) */
-typedef struct { sha256_ctx inner, outer; } hmac_ctx;
+/* HMAC-SHA256 with the inner and outer states prepared once (PBKDF2 reuses them);
+ * work and ih hold what each HMAC leaves, so that PBKDF2 clears them once */
+typedef struct { sha256_ctx inner, outer, work; uint8_t ih[32]; } hmac_ctx;
 
 static void hmac_init(hmac_ctx *m, const uint8_t *key, size_t keylen)
 {
@@ -151,26 +163,26 @@ static void hmac_init(hmac_ctx *m, const uint8_t *key, size_t keylen)
 	sha256_init(&m->inner); sha256_update(&m->inner, pad, 64);
 	for (int i = 0; i < 64; i++) pad[i] = k[i] ^ 0x5c;
 	sha256_init(&m->outer); sha256_update(&m->outer, pad, 64);
+	wipe(k, sizeof k); wipe(pad, sizeof pad);
 }
 
-static void hmac(const hmac_ctx *m, const uint8_t *msg, size_t n, uint8_t out[32])
+static void hmac(hmac_ctx *m, const uint8_t *msg, size_t n, uint8_t out[32])
 {
-	sha256_ctx c = m->inner;
-	uint8_t ih[32];
-	sha256_update(&c, msg, n);
-	sha256_final(&c, ih);
-	c = m->outer;
-	sha256_update(&c, ih, 32);
-	sha256_final(&c, out);
+	m->work = m->inner;
+	sha256_update(&m->work, msg, n);
+	sha256_final(&m->work, m->ih);
+	m->work = m->outer;
+	sha256_update(&m->work, m->ih, 32);
+	sha256_final(&m->work, out);
 }
 
 void ut_pbkdf2_sha256(const uint8_t *pw, size_t pwlen, const uint8_t *salt, size_t saltlen,
                       uint32_t iterations, uint8_t *out, size_t outlen)
 {
 	hmac_ctx m;
+	uint8_t msg[128], u[32], t[32];
 	hmac_init(&m, pw, pwlen);
 	for (uint32_t block = 1, pos = 0; pos < outlen; block++, pos += 32) {
-		uint8_t msg[128], u[32], t[32];
 		size_t n = saltlen < 124 ? saltlen : 124;
 		memcpy(msg, salt, n);
 		msg[n] = (uint8_t)(block >> 24); msg[n + 1] = (uint8_t)(block >> 16);
@@ -183,6 +195,7 @@ void ut_pbkdf2_sha256(const uint8_t *pw, size_t pwlen, const uint8_t *salt, size
 		}
 		memcpy(out + pos, t, outlen - pos < 32 ? outlen - pos : 32);
 	}
+	wipe(&m, sizeof m); wipe(msg, sizeof msg); wipe(u, sizeof u); wipe(t, sizeof t);
 }
 
 #endif
@@ -198,12 +211,15 @@ static int pin_xor(uint8_t *entropy, size_t len, const char *pin)
 	for (; pin[n]; n++) {
 		char ch = pin[n];
 		if (ch >= 'a' && ch <= 'z') ch = (char)(ch - 32);
-		if (n >= sizeof up || !((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')))
+		if (n >= sizeof up || !((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'))) {
+			wipe(up, sizeof up);
 			return UT_ERR_PIN;
+		}
 		up[n] = (uint8_t)ch;
 	}
 	ut_pbkdf2_sha256(up, n, (const uint8_t *)salt, sizeof salt - 1, 10000, key, len);
 	for (size_t i = 0; i < len; i++) entropy[i] ^= key[i];
+	wipe(key, sizeof key); wipe(up, sizeof up);
 	return UT_OK;
 }
 
@@ -463,13 +479,12 @@ typedef struct {
 	size_t n;
 } ur_t;
 
-static int parse_ur(const char *text, ur_t *u)
+static int parse_ur_in(const char *text, ur_t *u, char t[UT_MAX_UR], uint8_t *all)
 {
-	char t[UT_MAX_UR];
 	size_t len = 0, slash[3], ns = 0;
 	while (*text == ' ' || *text == '\n' || *text == '\r' || *text == '\t') text++;
 	for (; text[len] && !(text[len] == ' ' || text[len] == '\n' || text[len] == '\r'); len++) {
-		if (len + 1 >= sizeof t) return UT_ERR_TOO_LONG; /* longer than any one frame's UR */
+		if (len + 1 >= UT_MAX_UR) return UT_ERR_TOO_LONG; /* longer than any one frame's UR */
 		char ch = text[len];
 		t[len] = (char)((ch >= 'A' && ch <= 'Z') ? ch + 32 : ch);
 		if (t[len] == '/') { if (ns == 3) return UT_ERR_UR; slash[ns++] = len; }
@@ -488,7 +503,6 @@ static int parse_ur(const char *text, ur_t *u)
 	size_t wl = len - slash[ns - 1] - 1;
 	if (wl % 2 || wl < 10) return UT_ERR_UR;
 	if (wl / 2 - 4 > sizeof u->body) return UT_ERR_TOO_LONG;
-	uint8_t all[sizeof u->body + 4];
 	for (size_t i = 0; i < wl / 2; i++) {
 		int b = byteword(words[2 * i], words[2 * i + 1]);
 		if (b < 0) return UT_ERR_UR;
@@ -509,6 +523,15 @@ static int parse_ur(const char *text, ur_t *u)
 		if (*p != '/' || s2 != seq || c2 != count) return UT_ERR_UR;
 	}
 	return UT_OK;
+}
+
+static int parse_ur(const char *text, ur_t *u)
+{
+	char t[UT_MAX_UR];
+	uint8_t all[sizeof u->body + 4];
+	int r = parse_ur_in(text, u, t, all);
+	wipe(t, sizeof t); wipe(all, sizeof all);
+	return r;
 }
 
 static int put_str(char *out, size_t cap, size_t *pos, const char *s)
@@ -603,14 +626,16 @@ int32_t ut_frame_from_ur(const char *ur, ut_frame *f)
 {
 	ur_t u;
 	int r = parse_ur(ur, &u);
-	if (r) return r;
-	size_t tl = strlen(u.type);
-	if (u.n < 1 || u.n > 255 || tl > UT_MAX_TYPE) return UT_ERR_TOO_LONG;
-	f->kind = (uint8_t)u.kind;
-	memcpy(f->type, u.type, tl + 1);
-	memcpy(f->body, u.body, u.n);
-	f->n = (uint8_t)u.n;
-	return f->n;
+	size_t tl = r ? 0 : strlen(u.type);
+	if (!r && (u.n < 1 || u.n > 255 || tl > UT_MAX_TYPE)) r = UT_ERR_TOO_LONG;
+	if (!r) {
+		f->kind = (uint8_t)u.kind;
+		memcpy(f->type, u.type, tl + 1);
+		memcpy(f->body, u.body, u.n);
+		r = f->n = (uint8_t)u.n;
+	}
+	wipe(&u, sizeof u);
+	return r;
 }
 
 int32_t ut_frame_ur(const ut_frame *f, char *ur, size_t cap)
@@ -644,24 +669,29 @@ int32_t ut_frame_encode(const ut_frame *f, char *tones, size_t cap)
 	}
 	ut_rs_encode(cw, n, UT_PARITY, cw + n);
 	n += UT_PARITY;
-	if (cap < 5) return UT_ERR_SPACE;
-	memcpy(tones, LEAD, 2); memcpy(tones + 2, SYNC, 2);
-	int r = to_tones(cw, n, SYNC[1], tones + 4, cap - 4);
-	return r < 0 ? r : r + 4;
+	int r = UT_ERR_SPACE;
+	if (cap >= 5) {
+		memcpy(tones, LEAD, 2); memcpy(tones + 2, SYNC, 2);
+		r = to_tones(cw, n, SYNC[1], tones + 4, cap - 4);
+		if (r >= 0) r += 4;
+	}
+	wipe(cw, n);
+	return r;
 }
 
 int32_t ut_ur_to_frame(const char *ur, char *tones, size_t cap)
 {
 	ut_frame f;
 	int32_t r = ut_frame_from_ur(ur, &f);
-	return r < 0 ? r : ut_frame_encode(&f, tones, cap);
+	if (r >= 0) r = ut_frame_encode(&f, tones, cap);
+	wipe(&f, sizeof f);
+	return r;
 }
 
 /* the codeword after the sync, checked: Reed-Solomon, header, a part's sequence */
-static int frame_body(const char *tones, size_t len, ut_frame *f, int *corrected)
+static int frame_body_in(const char *tones, size_t len, ut_frame *f, int *corrected, uint8_t cw[300])
 {
-	uint8_t cw[300];
-	int n = from_tones(tones, len, SYNC[1], cw, sizeof cw);
+	int n = from_tones(tones, len, SYNC[1], cw, 300);
 	if (n < 0) return n;
 	if (n < UT_PARITY + 4 || n > 255) return UT_ERR_DECODE;
 	int fixed = ut_rs_correct(cw, (size_t)n, UT_PARITY);
@@ -689,11 +719,18 @@ static int frame_body(const char *tones, size_t len, ut_frame *f, int *corrected
 	return (int)blen;
 }
 
-int32_t ut_frame_decode(const char *tones, ut_frame *f, int *corrected)
+static int frame_body(const char *tones, size_t len, ut_frame *f, int *corrected)
+{
+	uint8_t cw[300];
+	int r = frame_body_in(tones, len, f, corrected, cw);
+	wipe(cw, sizeof cw);
+	return r;
+}
+
+static int frame_decode(const char *tones, ut_frame *f, int *corrected, char *cand)
 {
 	size_t len = strlen(tones), starts[4], ns = 0;
 	int err = UT_ERR_SYNC;
-	char cand[UT_MAX_FRAME + 2];
 	for (size_t i = 0; i < 4 && i + 2 <= len; i++)
 		if (tones[i] == SYNC[0] && tones[i + 1] == SYNC[1]) starts[ns++] = i + 2;
 	if (!ns && len && tones[0] == SYNC[1]) starts[ns++] = 1;   /* the sync's first tone was lost */
@@ -724,14 +761,22 @@ int32_t ut_frame_decode(const char *tones, ut_frame *f, int *corrected)
 	return err;
 }
 
+int32_t ut_frame_decode(const char *tones, ut_frame *f, int *corrected)
+{
+	char cand[UT_MAX_FRAME + 2];   /* the tones realigned: a seed's, maybe */
+	int r = frame_decode(tones, f, corrected, cand);
+	wipe(cand, sizeof cand);
+	return r;
+}
+
 int32_t ut_frame_to_ur(const char *tones, char *ur, size_t cap, int *corrected)
 {
 	ut_frame f;
 	int fixed = 0;
 	int32_t r = ut_frame_decode(tones, &f, &fixed);
-	if (r < 0) return r;
-	r = ut_frame_ur(&f, ur, cap);
+	if (r >= 0) r = ut_frame_ur(&f, ur, cap);
 	if (r >= 0 && corrected) *corrected = fixed;
+	wipe(&f, sizeof f);
 	return r;
 }
 
@@ -754,6 +799,7 @@ static void indices(const uint8_t *e, size_t len, uint16_t *idx)
 		idx[w] = v;
 	}
 	(void)nbits;
+	wipe(h, sizeof h);
 }
 
 int32_t ut_seed_to_keypad(const uint8_t *entropy, size_t len, const char *pin, char *out, size_t cap)
@@ -761,46 +807,53 @@ int32_t ut_seed_to_keypad(const uint8_t *entropy, size_t len, const char *pin, c
 	uint8_t e[32];
 	uint16_t idx[24];
 	int r;
+	size_t words = len * 3 / 4;
 	if (len != 16 && len != 32) return UT_ERR_SEED;
 	memcpy(e, entropy, len);
-	if ((r = pin_xor(e, len, pin))) return r;
-	indices(e, len, idx);
-	size_t words = len * 3 / 4;
-	if (4 * words + 3 > cap) return UT_ERR_SPACE;
-	out[0] = '*';
-	for (size_t w = 0; w < words; w++)
-		for (int d = 0; d < 4; d++) {
-			static const uint16_t P[4] = {1000, 100, 10, 1};
-			out[1 + 4 * w + (size_t)d] = (char)('0' + idx[w] / P[d] % 10);
-		}
-	out[1 + 4 * words] = '#';
-	out[2 + 4 * words] = 0;
-	memset(e, 0, sizeof e);
-	return (int32_t)(2 + 4 * words);
+	if (!(r = pin_xor(e, len, pin)) && 4 * words + 3 > cap)
+		r = UT_ERR_SPACE;
+	if (!r) {
+		indices(e, len, idx);
+		out[0] = '*';
+		for (size_t w = 0; w < words; w++)
+			for (int d = 0; d < 4; d++) {
+				static const uint16_t P[4] = {1000, 100, 10, 1};
+				out[1 + 4 * w + (size_t)d] = (char)('0' + idx[w] / P[d] % 10);
+			}
+		out[1 + 4 * words] = '#';
+		out[2 + 4 * words] = 0;
+		r = (int)(2 + 4 * words);
+	}
+	wipe(e, sizeof e); wipe(idx, sizeof idx);
+	return r;
 }
 
 int32_t ut_keypad_to_seed(const char *tones, const char *pin, uint8_t *entropy)
 {
 	size_t len = strlen(tones), nd = len - 2, words = nd / 4;
 	uint16_t idx[24], check[24];
+	int r = UT_OK;
 	if (len < 3 || tones[0] != '*' || tones[len - 1] != '#' || nd % 4 || (words != 12 && words != 24)) return UT_ERR_SEED;
-	for (size_t w = 0; w < words; w++) {
+	for (size_t w = 0; w < words && !r; w++) {
 		unsigned v = 0;
 		for (int d = 0; d < 4; d++) {
 			char ch = tones[1 + 4 * w + (size_t)d];
-			if (ch < '0' || ch > '9') return UT_ERR_SEED;
+			if (ch < '0' || ch > '9') r = UT_ERR_SEED;
 			v = v * 10 + (unsigned)(ch - '0');
 		}
-		if (v > 2047) return UT_ERR_SEED;
+		if (v > 2047) r = UT_ERR_SEED;
 		idx[w] = (uint16_t)v;
 	}
 	size_t elen = words * 4 / 3;
 	memset(entropy, 0, elen);
-	for (size_t bit = 0; bit < 8 * elen; bit++)
-		if (idx[bit / 11] >> (10 - bit % 11) & 1) entropy[bit / 8] |= (uint8_t)(0x80 >> bit % 8);
-	indices(entropy, elen, check);
-	if (check[words - 1] != idx[words - 1]) return UT_ERR_CHECKSUM;
-	int r = pin_xor(entropy, elen, pin);
+	if (!r) {
+		for (size_t bit = 0; bit < 8 * elen; bit++)
+			if (idx[bit / 11] >> (10 - bit % 11) & 1) entropy[bit / 8] |= (uint8_t)(0x80 >> bit % 8);
+		indices(entropy, elen, check);
+		r = check[words - 1] != idx[words - 1] ? UT_ERR_CHECKSUM : pin_xor(entropy, elen, pin);
+	}
+	if (r) wipe(entropy, elen);
+	wipe(idx, sizeof idx); wipe(check, sizeof check);
 	return r ? r : (int32_t)elen;
 }
 
@@ -815,10 +868,9 @@ int32_t ut_seed_to_ur(const uint8_t *entropy, size_t len, const char *pin, char 
 	body[n++] = 0xA1; body[n++] = 0x01;
 	n += cbor_head(body + n, 2, (uint32_t)len);
 	memcpy(body + n, entropy, len);
-	if ((r = pin_xor(body + n, len, pin))) return r;
-	n += len;
-	r = ur_text("crypto-seed", KIND_SINGLE, body, n, ur, cap);
-	memset(body, 0, sizeof body);
+	if (!(r = pin_xor(body + n, len, pin)))
+		r = ur_text("crypto-seed", KIND_SINGLE, body, n + len, ur, cap);
+	wipe(body, sizeof body);
 	return r;
 }
 
@@ -828,13 +880,14 @@ int32_t ut_ur_to_seed(const char *ur, const char *pin, uint8_t *entropy)
 	size_t i = 2;
 	uint32_t len;
 	int r = parse_ur(ur, &u);
-	if (r) return r;
-	if ((strcmp(u.type, "crypto-seed") && strcmp(u.type, "seed")) || u.kind != KIND_SINGLE) return UT_ERR_SEED;
-	if (u.n < 3 || u.body[0] != 0xA1 || u.body[1] != 0x01 || cbor_read(u.body, u.n, &i, 2, &len)) return UT_ERR_SEED;
-	if ((len != 16 && len != 32) || i + len > u.n) return UT_ERR_SEED;
-	memcpy(entropy, u.body + i, len);
-	memset(&u, 0, sizeof u);
-	r = pin_xor(entropy, len, pin);
+	if (!r && ((strcmp(u.type, "crypto-seed") && strcmp(u.type, "seed")) || u.kind != KIND_SINGLE)) r = UT_ERR_SEED;
+	if (!r && (u.n < 3 || u.body[0] != 0xA1 || u.body[1] != 0x01 || cbor_read(u.body, u.n, &i, 2, &len))) r = UT_ERR_SEED;
+	if (!r && ((len != 16 && len != 32) || i + len > u.n)) r = UT_ERR_SEED;
+	if (!r) {
+		memcpy(entropy, u.body + i, len);
+		if ((r = pin_xor(entropy, len, pin))) wipe(entropy, len);
+	}
+	wipe(&u, sizeof u);
 	return r ? r : (int32_t)len;
 }
 
