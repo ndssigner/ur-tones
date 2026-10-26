@@ -22,8 +22,9 @@ static int leaks, checked;
 
 static void __attribute__((noinline)) scrub(void)
 {
-	volatile uint8_t s[DEPTH];
-	for (size_t i = 0; i < DEPTH; i++) s[i] = 0;
+	uint8_t s[DEPTH];
+	volatile uint8_t *v = s;   /* stores the compiler keeps */
+	for (size_t i = 0; i < DEPTH; i++) v[i] = 0;
 }
 
 static int found(const volatile uint8_t *s, const uint8_t *p, size_t n)
