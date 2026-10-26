@@ -1,20 +1,54 @@
-# Tests the reference implementation and the web tool against the test
-# vectors, builds the web tool and the release zip (reproducible: compare the
-# printed SHA-256 with a local build of the same commit). On main, publishes
-# the web tool on GitHub Pages; on a version tag (v*), drafts a release.
-name: test-and-build
+# The C library: against the test vectors and the Python reference (audio
+# included), its fountain codes and keys against ur2 and the web tool's
+# keys.js, its configuration, layers, hooks and switches; then built for
+# microcontrollers (tools/portability.sh) and the Pico example. Runs only
+# when the library or what its tests compare it with changes; release.yml
+# calls it for every version tag.
+name: c-library
 
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    paths:
+      - "c/**"
+      - "tests/c/**"
+      - "tests/configs/**"
+      - "tests/test_c.py"
+      - "tests/test_c_multipart.py"
+      - "tests/test_c_layers.py"
+      - "tests/acoustic.py"
+      - "reference/python/**"
+      - "vectors/**"
+      - "web/src/keys.js"
+      - "tools/gen_tables.py"
+      - "tools/portability.sh"
+      - "examples/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/c.yml"
   pull_request:
+    paths:
+      - "c/**"
+      - "tests/c/**"
+      - "tests/configs/**"
+      - "tests/test_c.py"
+      - "tests/test_c_multipart.py"
+      - "tests/test_c_layers.py"
+      - "tests/acoustic.py"
+      - "reference/python/**"
+      - "vectors/**"
+      - "web/src/keys.js"
+      - "tools/gen_tables.py"
+      - "tools/portability.sh"
+      - "examples/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/c.yml"
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
-  test-and-build:
+  tests:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -27,8 +61,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      - name: Python reference against the vectors (and audio)
-        run: python3 tests/test_reference.py
       - name: C library against the vectors and the reference (and audio)
         run: python3 tests/test_c.py
       - name: C library, multi-part URs and keys, with integers and with doubles
@@ -37,25 +69,6 @@ jobs:
         run: python3 tests/test_c_layers.py
       - name: C library uses no floating point by default (CPUs without an FPU)
         run: cc -std=c99 -Wall -Werror -mgeneral-regs-only -c c/ur_tones.c -o /dev/null
-      - name: JavaScript against the vectors (and audio)
-        run: node web/test.mjs
-      - name: Build the web tool
-        run: node web/build.mjs
-      - name: Bundle (tag name, or dev-<commit> between releases)
-        run: |
-          case "$GITHUB_REF" in refs/tags/v*) v="$GITHUB_REF_NAME" ;; *) v="dev-$(echo "$GITHUB_SHA" | cut -c1-12)" ;; esac
-          python3 tools/bundle.py "$v"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ur-tones
-          path: |
-            dist/ur-tones-*.zip
-            dist/SHA256SUMS
-      - name: The site for GitHub Pages
-        run: mkdir site && cp dist/ur-tones.html site/index.html
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: site
 
   portability:
     runs-on: ubuntu-24.04
@@ -69,7 +82,7 @@ jobs:
         with:
           path: ~/arm-gnu-toolchain
           key: arm-gnu-toolchain-14.3.rel1-x86_64
-      - name: Arm GNU Toolchain for the Cortex-M0+
+      - name: Arm GNU Toolchain
         if: steps.arm-cache.outputs.cache-hit != 'true'
         run: |
           f=arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi.tar.xz
@@ -93,36 +106,3 @@ jobs:
           cmake -S examples/pico -B build/pico -DPICO_SDK_PATH="$PWD/pico-sdk"
           cmake --build build/pico -j "$(nproc)"
           ls -l build/pico/ur_tones_pico.uf2
-
-  pages:
-    if: github.ref == 'refs/heads/main'
-    needs: test-and-build
-    runs-on: ubuntu-24.04
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v5
-
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: test-and-build
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: ur-tones
-      - name: Draft release (published by hand after checking the hash)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" ur-tones-*.zip SHA256SUMS \
-            --repo "$GITHUB_REPOSITORY" --draft --prerelease \
-            --title "ur-tones $GITHUB_REF_NAME" \
-            --notes "Web tool (EN/ES) and specification. Draft: test seeds and testnet PSBTs only. Verify: sha256sum -c SHA256SUMS"
