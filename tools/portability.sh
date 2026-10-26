@@ -5,6 +5,7 @@
 # struct an application places.
 #
 #     tools/portability.sh m0plus     # RP2040 (Cortex-M0+): arm-none-eabi-gcc
+#     tools/portability.sh arm946     # Nintendo DSi (ARM946E-S): arm-none-eabi-gcc
 #
 # Prints the figures docs/porting.md quotes; exits non-zero on any failure.
 set -eu
@@ -16,8 +17,13 @@ m0plus)
 	prefix=arm-none-eabi-
 	config=c/configs/ut_config_rp2040.h
 	;;
+arm946)
+	cc="arm-none-eabi-gcc -march=armv5te -mtune=arm946e-s -marm"
+	prefix=arm-none-eabi-
+	config=c/configs/ut_config_nds.h
+	;;
 *)
-	echo "usage: $0 m0plus" >&2
+	echo "usage: $0 m0plus|arm946" >&2
 	exit 2
 	;;
 esac

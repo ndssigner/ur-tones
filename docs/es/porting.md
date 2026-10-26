@@ -116,11 +116,25 @@ con DMA a 16 kHz), envía (PWM) y mide. En una Pico a 125 MHz:
 
 La salida PWM del ejemplo está hecha, pero aún no se ha probado en una placa.
 
-### Nintendo DSi (ARM946E-S, sin FPU)
+### Nintendo DSi (ARM946E-S, sin FPU): medida
 
-[NDS-Signer](https://github.com/ndssigner/nds-signer) usa la librería con los
-valores por defecto: unos 26 KB de código ARM. La escucha se ha probado en una
-DSi real.
+[`c/configs/ut_config_nds.h`](../../c/configs/ut_config_nds.h): los valores
+por defecto. La CI la compila con los avisos como errores
+(`tools/portability.sh arm946`). [NDS-Signer](https://github.com/ndssigner/nds-signer)
+la usa para escuchar por el micrófono y reproducir por el altavoz; el
+diagnóstico de su versión de desarrollo (Diagnostics -> Benchmark) ejecuta
+el `bench` de `examples/pico`. En una DSi XL (134 MHz, devkitARM, `-O2`):
+
+| | |
+| --- | --- |
+| Código (ARM, la librería entera) | 26,5 KB con `-Os`, 33,8 KB con `-O2` |
+| PIN de la semilla (PBKDF2, 10.000 iteraciones) | 1,06 s |
+| Receptor (`ut_listener_push`) | 44 ms de CPU por segundo de audio a 16.364 Hz (4,4 %) |
+| Una trama con 5 tonos mal oídos (`ut_frame_to_ur`) | 2 ms |
+| Por el aire, en una DSi XL | semillas, con y sin PIN; una PSBT en los dos sentidos con Sparrow |
+
+También se midió `UT_HOT` en la ITCM y se dejó fuera: el PIN pasó de 1,06 s
+a 1,01 s, porque la caché de instrucciones de 8 KB ya contiene los bucles.
 
 ### Previstas
 

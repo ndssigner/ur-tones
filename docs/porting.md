@@ -115,11 +115,25 @@ measures. On a Pico at 125 MHz:
 
 The example's PWM output is built but not yet tested on a board.
 
-### Nintendo DSi (ARM946E-S, no FPU)
+### Nintendo DSi (ARM946E-S, no FPU): measured
 
-[NDS-Signer](https://github.com/ndssigner/nds-signer) uses the library with
-the defaults: about 26 KB of ARM code. Listening has been tested on a real
-DSi.
+[`c/configs/ut_config_nds.h`](../c/configs/ut_config_nds.h): the defaults.
+CI builds it with warnings as errors (`tools/portability.sh arm946`).
+[NDS-Signer](https://github.com/ndssigner/nds-signer) uses it to listen
+through the microphone and to play through the speaker; its developer
+build's Diagnostics -> Benchmark runs `examples/pico`'s bench. On a DSi XL
+(134 MHz, devkitARM, `-O2`):
+
+| | |
+| --- | --- |
+| Code (ARM, whole library) | 26.5 KB at `-Os`, 33.8 KB at `-O2` |
+| Seed PIN (PBKDF2, 10,000 iterations) | 1.06 s |
+| Receiver (`ut_listener_push`) | 44 ms of CPU per second of audio at 16,364 Hz (4.4%) |
+| A frame with 5 misheard tones (`ut_frame_to_ur`) | 2 ms |
+| Through the air, on a DSi XL | seeds, with and without a PIN; a PSBT both ways with Sparrow |
+
+`UT_HOT` in ITCM was measured too and left out: the PIN went from 1.06 s
+to 1.01 s, as the 8 KB instruction cache already holds the hot loops.
 
 ### Planned
 

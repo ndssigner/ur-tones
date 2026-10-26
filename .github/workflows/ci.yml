@@ -80,6 +80,8 @@ jobs:
       - run: echo "$HOME/arm-gnu-toolchain/bin" >> "$GITHUB_PATH"
       - name: C library for the RP2040 (Cortex-M0+), warnings as errors; its sizes
         run: tools/portability.sh m0plus
+      - name: C library for the Nintendo DSi (ARM946E-S), warnings as errors; its sizes
+        run: tools/portability.sh arm946
       - uses: actions/checkout@v7
         with:
           repository: raspberrypi/pico-sdk
