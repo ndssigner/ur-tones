@@ -61,8 +61,9 @@
  * On MCUs that run code from flash through a cache (XIP), putting them in
  * RAM avoids the waits:
  *
- *   RP2040, RP2350 (Pico SDK's linker scripts copy .time_critical.* to RAM):
- *   #define UT_HOT __attribute__((section(".time_critical.ur_tones")))
+ *   RP2040, RP2350 (Pico SDK's linker scripts copy .time_critical.* to RAM;
+ *   noinline, or a static loop inlined into its caller stays in flash):
+ *   #define UT_HOT __attribute__((noinline, section(".time_critical.ur_tones")))
  *   ESP32 family (ESP-IDF):
  *   #include "esp_attr.h"
  *   #define UT_HOT IRAM_ATTR
