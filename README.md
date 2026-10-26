@@ -147,7 +147,7 @@ python3 tests/test_c_layers.py       # its configuration, layers, hooks and swit
 tools/portability.sh m0plus          # built for the RP2040, with its sizes (arm-none-eabi-gcc)
 node web/test.mjs                    # the JavaScript (Node.js ≥ 18)
 node web/build.mjs                   # dist/ur-tones.html + its SHA-256
-python3 tools/bundle.py v0.3.0       # the release zip, reproducible
+python3 tools/bundle.py v0.4.0       # the release zip, reproducible
 python3 tools/readme_hero.py         # this README's picture (needs Chrome)
 ```
 
