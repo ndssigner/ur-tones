@@ -62,18 +62,32 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - name: Toolchain for the Cortex-M0+
-        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
+      # Arm's own toolchain, checked by its SHA-256 and cached: apt's packages
+      # took over 10 minutes to install.
+      - id: arm-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/arm-gnu-toolchain
+          key: arm-gnu-toolchain-14.3.rel1-x86_64
+      - name: Arm GNU Toolchain for the Cortex-M0+
+        if: steps.arm-cache.outputs.cache-hit != 'true'
+        run: |
+          f=arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi.tar.xz
+          curl -fsSL -o "$f" "https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/$f"
+          echo "8f6903f8ceb084d9227b9ef991490413014d991874a1e34074443c2a72b14dbd  $f" | sha256sum -c -
+          mkdir -p ~/arm-gnu-toolchain
+          tar -xJf "$f" -C ~/arm-gnu-toolchain --strip-components=1
+      - run: echo "$HOME/arm-gnu-toolchain/bin" >> "$GITHUB_PATH"
       - name: C library for the RP2040 (Cortex-M0+), warnings as errors; its sizes
         run: tools/portability.sh m0plus
       - uses: actions/checkout@v7
         with:
           repository: raspberrypi/pico-sdk
           ref: "2.3.1"
-          submodules: true
           path: pico-sdk
       - name: The Pico example (examples/pico)
         run: |
+          git -C pico-sdk submodule update --init --depth 1 lib/tinyusb   # USB serial; the rest is for radios
           cmake -S examples/pico -B build/pico -DPICO_SDK_PATH="$PWD/pico-sdk"
           cmake --build build/pico -j "$(nproc)"
           ls -l build/pico/ur_tones_pico.uf2
