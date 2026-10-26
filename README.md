@@ -119,6 +119,11 @@ air-gapped device.
   against Blockchain Commons' vectors and the web tool, built both ways;
   `tests/test_c_layers.py` checks the configuration, the layers (against
   the reference and the library before them), the hooks and the switches.
+- `docs/porting.md` ([español](docs/es/porting.md)): porting the C library —
+  where hardware plugs in, what each part costs, measured configurations,
+  and **ports wanted**. `c/configs/` has the tested configurations;
+  `CMakeLists.txt` makes the library a CMake target; `examples/pico/` is a
+  Raspberry Pi Pico that listens by cable, sends, and measures.
 - `vectors/ur-tones-v0.json`: test vectors, public test data only — test
   seeds, testnet PSBTs, and the xpubs and descriptors of the BIP-39 test
   seed (`crypto-hdkey`, `crypto-output`, `crypto-account`) and `bytes`
@@ -139,6 +144,7 @@ python3 tests/test_reference.py      # the Python reference
 python3 tests/test_c.py              # the C library (needs cc)
 python3 tests/test_c_multipart.py    # its fountain codes and keys (cc; Node.js too)
 python3 tests/test_c_layers.py       # its configuration, layers, hooks and switches (cc)
+tools/portability.sh m0plus          # built for the RP2040, with its sizes (arm-none-eabi-gcc)
 node web/test.mjs                    # the JavaScript (Node.js ≥ 18)
 node web/build.mjs                   # dist/ur-tones.html + its SHA-256
 python3 tools/bundle.py v0.3.0       # the release zip, reproducible
