@@ -19,6 +19,7 @@ KEYS = "0123456789ABCD*#"  # nibble value -> key
 LEAD = "CB"  # lead-in: lets the receiver settle; may be lost
 SYNC = "AD"
 PARITY = 32  # Reed-Solomon parity bytes per frame: repairs 16 wrong bytes
+PACES = {"air": (80, 80), "cable": (40, 20), "fast": (30, 10)}  # data mode: (tone, silence) ms, SPEC §1.1
 KIND_SINGLE, KIND_PART = 0, 1
 UR_TYPES = ["", "crypto-psbt", "psbt", "crypto-seed", "seed", "crypto-account",
             "account-descriptor", "crypto-output", "output-descriptor", "bytes",

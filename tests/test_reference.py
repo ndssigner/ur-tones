@@ -118,10 +118,17 @@ def main():
         (8000, 80, 80, 0.985, dict(speaker_fc=600, rt60=0.3, wet=0.4, noise=0.005)),     # quiet room
         (44100, 80, 80, 1.0, dict(speaker_fc=900, rt60=0.4, wet=0.6, noise=0.04)),       # noisy room
     ]
+    check(st.PACES == {"air": (80, 80), "cable": (40, 20), "fast": (30, 10)}, "the three speeds (SPEC §1.1)")
+    for rate in (8000, 16000, 44100):   # fast cable, by cable (SPEC §1.1)
+        channels.append((rate, *st.PACES["fast"], 1.0, dict(speaker_fc=50, rt60=0, noise=0.003, fade=0)))
     for rate, tone, gap, detune, ch in channels:
         if rate > 16000 and "--fast" in sys.argv:
             continue
-        audio = acoustic.channel(st.render(groups, rate, tone, gap, detune=detune), rate, rng, **ch)
+        if (tone, gap) == st.PACES["fast"]:   # keypad mode never goes at fast cable: its digits repeat
+            samples = st.render(groups[:1], rate, *st.PACES["air"], detune=detune) + st.render(groups[1:], rate, tone, gap, detune=detune)
+        else:
+            samples = st.render(groups, rate, tone, gap, detune=detune)
+        audio = acoustic.channel(samples, rate, rng, **ch)
         got = st.receive(audio, rate)
         check([g[:2] for g in got] == expect, "audio %d Hz %d/%d ms detune %.3f %s: %s"
               % (rate, tone, gap, detune, ch, [g[:2] for g in got]))

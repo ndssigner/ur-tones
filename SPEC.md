@@ -39,14 +39,25 @@ In data mode the tones are taken in this order, the **key order**:
 
 ### 1.1 Timing
 
-- A tone lasts **at least 40 ms**. The receiver finds where each tone starts
+- A tone lasts **at least 30 ms**. The receiver finds where each tone starts
   and ends, so the sender chooses the pace — a person pressing keys works
   too.
-- **Data mode**: at least 20 ms of silence after each tone. Recommended:
-  **40 ms tone + 20 ms silence by cable** (about 16 tones per second);
-  **80 ms + 80 ms through the air**. The silences inside a frame are at most
-  150 ms; frames are separated by **at least 300 ms** of silence
-  (recommended 400 ms by cable, 600 ms through the air).
+- **Data mode**: at least 10 ms of silence after each tone, at one of three
+  **speeds**:
+
+  | Speed | Tone + silence | Tones per second | For |
+  | :--- | :---: | :---: | :--- |
+  | **Air** | 80 + 80 ms | 6.3 | loudspeakers in a room |
+  | **Cable** | 40 + 20 ms | 16.7 | a cable, or an earbud next to the microphone with no echo |
+  | **Fast cable** | 30 + 10 ms | 25 | a short cable, to a receiver that supports it |
+
+  Fast cable is at the limit of the receiver in Appendix A, which needs a
+  tone to last 30 ms: a sender uses it only when the user knows the
+  receiver supports it, and goes back to Cable when frames fail. A
+  receiver may understand faster paces; these limits bind the sender.
+  The silences inside a frame are at most 150 ms; frames are separated by
+  **at least 300 ms** of silence (recommended 400 ms by cable, 600 ms
+  through the air).
 - **Keypad mode** played by a machine: at least 80 ms + 80 ms. Its digits
   repeat (`00`, `66`): the silence between two equal tones must be clearly
   longer than a flicker.
@@ -75,6 +86,7 @@ GF(256) with **32 parity bytes** at the end, the same code as QR codes
 It repairs **16 wrong bytes**: any two misheard tones, and almost always
 four — a noisy room (a fan, a television) costs a few. Decoding it is light
 work even for a modest device: at most 255 bytes, and 32 syndromes.
+**Error correction** has one level in v0, *full*: these 32 parity bytes.
 Its data bytes are:
 
 | Bytes | Field |
