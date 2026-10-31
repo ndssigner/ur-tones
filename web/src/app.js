@@ -227,6 +227,23 @@
 	const bar = () => h("div", { class: "bar-track" }, h("div", {}));
 	const panel = (...children) => h("section", { class: "panel" }, ...children);
 
+	// ---- clearing a screen -----------------------------------------------
+	// Esc runs the current screen's Clear; render() resets it, each screen sets its own.
+	let onEscape = null;
+	addEventListener("keydown", (e) => { if (e.key === "Escape" && onEscape) onEscape(); });
+	// After Clear: the screen is drawn again, empty. For a seed, the clipboard may still
+	// hold it: try to empty it, and say whether the browser let the page do so.
+	async function cleared(seed) {
+		const t = T();
+		let msg = t.clearHelp;
+		if (seed) {
+			try { await navigator.clipboard.writeText(""); msg = t.clipboardCleared + " " + msg; }
+			catch (e) { msg = t.clipboardNotCleared + " " + msg; }
+		}
+		const screen = $("app").firstChild;
+		if (screen) screen.prepend(h("div", { class: "note", text: msg }));
+	}
+
 	// ---- send ---------------------------------------------------------
 	function sendScreen() {
 		const t = T(), s = st.send;
@@ -237,6 +254,20 @@
 		const area = h("textarea", { class: "input", rows: 4, spellcheck: "false", autocomplete: "off", placeholder: PLACEHOLDER });
 		area.value = s.text;
 		const genBtn = h("button", { class: "btn ghost small" });
+		// Clear: everything typed, made up or generated here, at once (also Esc)
+		function clearSend() {
+			if (!(s.text || s.generated || s.pin || s.made || s.gen.rolls)) return;
+			const parsed = s.text && parseInput(s.text, s.keyFormat, s.psbtFormat);
+			const seed = !!s.generated || (parsed && parsed.kind === "seed");
+			stopPlaying();
+			if (s.generated) s.generated.fill(0);
+			Object.assign(s, { text: "", pin: "", made: "", generated: null });
+			Object.assign(s.gen, { open: false, rolls: "" });
+			render();
+			cleared(seed);
+		}
+		onEscape = clearSend;
+		const clearBtn = h("button", { class: "btn ghost small", title: t.clearHelp, on: { click: clearSend } }, t.clear);
 		// a new seed: from the browser's random numbers, from dice, or both (SPEC: diceEntropy)
 		function generator() {
 			const g = s.gen, need = S.DICE_ROLLS[g.words], dice = g.source !== "browser";
@@ -272,6 +303,7 @@
 			stopPlaying();
 			const input = s.generated ? { kind: "seed", entropy: s.generated, words: s.generated.length * 3 / 4, generated: true } : parseInput(s.text, s.keyFormat, s.psbtFormat);
 			area.disabled = !!s.generated;
+			clearBtn.hidden = !(s.text || s.generated || s.pin || s.made);
 			area.placeholder = s.generated ? t.genHidden : PLACEHOLDER;
 			genBtn.textContent = s.generated ? t.genDiscard : "🎲 " + t.newSeed;
 			genBtn.onclick = s.generated ? () => { s.generated = null; update(); }
@@ -340,7 +372,7 @@
 		update();
 		return h("div", { class: "tool" },
 			panel(field(t.input, area,
-				h("div", { class: "row" }, info, h("button", { class: "btn ghost small push", on: { click: () => fileInput.click() } }, t.openFile), genBtn, fileInput)),
+				h("div", { class: "row" }, info, h("button", { class: "btn ghost small push", on: { click: () => fileInput.click() } }, t.openFile), genBtn, clearBtn, fileInput)),
 				options),
 			panel(live));
 	}
@@ -436,6 +468,7 @@
 			}
 		}
 		function gotSeed(entropy) {
+			L.entropy = entropy;
 			finish(done(t.gotSeed, seedAlert(), fingerprintBox(entropy, t.fingerprintReceive), revealWords(entropy),
 				L.pin ? h("div", { class: "hint", text: t.pinApplied }) : null));
 		}
@@ -523,9 +556,21 @@
 			e.target.value = "";
 		} } });
 
+		// Clear: the seed received, the PIN, what was heard and recorded (also Esc)
+		function clearListen() {
+			const seed = !!L.entropy;
+			if (L.entropy) L.entropy.fill(0);
+			stopMic();
+			Object.assign(rec, { pend: [], chunks: [], n: 0 });
+			render();
+			cleared(seed);
+		}
+		onEscape = clearListen;
+
 		return h("div", { class: "tool" },
 			panel(
-				h("div", { class: "row" }, micBtn, h("button", { class: "btn ghost small push", on: { click: () => wavInput.click() } }, t.openWav), wavInput),
+				h("div", { class: "row" }, micBtn, h("button", { class: "btn ghost small push", on: { click: () => wavInput.click() } }, t.openWav), wavInput,
+					h("button", { class: "btn ghost small", title: t.clearHelp, on: { click: clearListen } }, t.clear)),
 				micState, h("div", { class: "hint", text: t.micHint }), err,
 				field(t.pin, pin, h("div", { class: "hint", text: t.pinHint })),
 				h("details", { class: "more" }, h("summary", { text: t.recTitle }), h("div", { class: "hint", text: t.recHelp }),
@@ -660,6 +705,7 @@
 	}
 	function render() {
 		shell(); online(); links();
+		onEscape = null;
 		$("app").replaceChildren(({
 			intro, send: sendScreen, listen: listenScreen,
 			cables: textScreen(() => T().cables, () => T().cableText),
