@@ -197,7 +197,7 @@ static void send(const char *ur)
 		printf("not sent: %ld\n", (long)r);
 		return;
 	}
-	ut_synth_init(&synth, out_tones, out_rate(), 40, 20, 400);
+	ut_synth_init(&synth, out_tones, out_rate(), UT_CABLE_TONE_MS, UT_CABLE_GAP_MS, 400);
 	sending = true;
 	pwm_run(true);
 	printf("sending %ld tones at %lu Hz\n", (long)r, (unsigned long)out_rate());
@@ -221,7 +221,7 @@ static void bench(void)
 
 	r = ut_ur_to_frame(BENCH_UR, tones, sizeof tones);
 	ut_listener_init(&l, RATE);
-	ut_synth_init(&s, tones, RATE, 40, 20, 400);
+	ut_synth_init(&s, tones, RATE, UT_CABLE_TONE_MS, UT_CABLE_GAP_MS, 400);
 	uint64_t busy = 0, samples = 0;
 	size_t n;
 	while ((n = ut_synth_read(&s, block, sizeof block / sizeof block[0]))) {

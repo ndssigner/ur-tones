@@ -323,6 +323,15 @@ typedef struct {
 	uint32_t ph1, ph2, inc1, inc2;
 } ut_synth;
 
+/* Data mode's three speeds, tone and silence in ms (SPEC §1.1). Fast cable
+ * only to a receiver known to support it; keypad mode always at Air. */
+#define UT_AIR_TONE_MS 80
+#define UT_AIR_GAP_MS 80
+#define UT_CABLE_TONE_MS 40
+#define UT_CABLE_GAP_MS 20
+#define UT_FAST_TONE_MS 30
+#define UT_FAST_GAP_MS 10
+
 /* Plays `tones` (kept, not copied) at `rate` Hz: a pause, each tone and its
  * gap, a final pause (SPEC §1.1), as signed 16-bit mono samples. */
 void ut_synth_init(ut_synth *s, const char *tones, uint32_t rate,

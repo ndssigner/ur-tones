@@ -12,6 +12,7 @@ import hashlib
 import json
 import pathlib
 import random
+import re
 import subprocess
 import sys
 import zlib
@@ -194,14 +195,24 @@ def main():
     psbt = next(v for v in VECTORS if "psbt_base64" in v)
     groups = [seed["keypad"], seed["frames"][0], pinned["frames"][0], psbt["frames"][0]]
     expect = [seed["entropy"], seed["ur"], pinned["ur"], psbt["urs"][0]]
-    for rate, tone, gap, ch in [(8000, 40, 20, dict(speaker_fc=50, rt60=0, noise=0.003, fade=0)),
+    header = dict(re.findall(r"#define UT_(\w+_(?:TONE|GAP))_MS (\d+)", (ROOT / "c" / "ur_tones.h").read_text()))
+    check({k: (int(header.get(k.upper() + "_TONE", 0)), int(header.get(k.upper() + "_GAP", 0)))
+           for k in ("air", "cable", "fast")} == st.PACES, "the three speeds in ur_tones.h, as SPEC §1.1")
+    cable = dict(speaker_fc=50, rt60=0, noise=0.003, fade=0)
+    for rate, tone, gap, ch in [(8000, 40, 20, cable),
                                 (16364, 80, 80, dict(speaker_fc=600, rt60=0.3, wet=0.4, noise=0.005)),
-                                (48000, 80, 80, dict(speaker_fc=900, rt60=0.4, wet=0.6, noise=0.03))]:
+                                (48000, 80, 80, dict(speaker_fc=900, rt60=0.4, wet=0.6, noise=0.03))] + \
+                               [(rate, *st.PACES["fast"], cable) for rate in (8000, 16000, 44100)]:
         label = "%d Hz %d/%d %s" % (rate, tone, gap, ch)
-        c_audio = acoustic.channel(c_render(groups, rate, tone, gap), rate, random.Random(rate), **ch)
+        fast = (tone, gap) == st.PACES["fast"]   # keypad mode never goes at fast cable: its digits repeat
+        c_samples = (c_render(groups[:1], rate, *st.PACES["air"]) + c_render(groups[1:], rate, tone, gap)) if fast \
+            else c_render(groups, rate, tone, gap)
+        c_audio = acoustic.channel(c_samples, rate, random.Random(rate), **ch)
         check([decode(g) for g in st.listen(c_audio, rate)] == expect, "C synthesis, Python ears: " + label)
         check([decode(g) for g in c_listen(c_audio, rate)] == expect, "C synthesis, C ears: " + label)
-        py_audio = acoustic.channel(st.render(groups, rate, tone, gap), rate, random.Random(rate + 1), **ch)
+        py_samples = (st.render(groups[:1], rate, *st.PACES["air"]) + st.render(groups[1:], rate, tone, gap)) if fast \
+            else st.render(groups, rate, tone, gap)
+        py_audio = acoustic.channel(py_samples, rate, random.Random(rate + 1), **ch)
         check([decode(g) for g in c_listen(py_audio, rate)] == expect, "Python synthesis, C ears: " + label)
     # keypad mode keyed by a person: uneven tones and long pauses
     audio = []
