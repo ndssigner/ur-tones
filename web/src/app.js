@@ -14,9 +14,8 @@
 	};
 	const T = () => UR_TONES_TEXT[st.lang];
 	// SPEC §1.1. Keypad mode's digits repeat: never faster than 80 + 80 ms
-	const PACES = { cable: { tone: 40, gap: 20, pause: 200 }, air: { tone: 80, gap: 80, pause: 300 } };
-	const paceFor = (input, sendSt) => input.kind === "seed" && sendSt.mode === "keypad"
-		? { tone: 80, gap: 80, pause: 300 } : PACES[sendSt.pace];
+	const PACES = { air: { ...TN.PACES.air, pause: 300 }, cable: { ...TN.PACES.cable, pause: 200 }, fast: { ...TN.PACES.fast, pause: 200 } };
+	const paceFor = (input, sendSt) => input.kind === "seed" && sendSt.mode === "keypad" ? PACES.air : PACES[sendSt.pace];
 
 	// ---- tiny DOM helpers --------------------------------------------
 	function h(tag, props, ...children) {
@@ -304,7 +303,10 @@
 				options.append(field(t.keyFormat, seg([["current", t.fmtCurrent, t.fmtCurrentHelp], ["legacy", t.fmtLegacy, t.fmtLegacyHelp]],
 					s.keyFormat, again((v) => { s.keyFormat = v; }))));
 			if (!(input.kind === "seed" && s.mode === "keypad"))
-				options.append(field(t.pace, seg([["cable", t.paceCable, t.paceCableHelp], ["air", t.paceAir, t.paceAirHelp]], s.pace, again((v) => { s.pace = v; }))));
+				options.append(
+					field(t.speed, seg([["air", t.speedAir, t.speedAirHelp], ["cable", t.speedCable, t.speedCableHelp], ["fast", t.speedFast, t.speedFastHelp]],
+						s.pace, again((v) => { s.pace = v; }))),
+					field(t.errorCorrection, h("div", { class: "hint", text: `${t.ecFull} — ${t.ecFullHelp}` })));
 			if (input.kind === "seed" && s.pace === "air" && s.mode !== "keypad")
 				options.append(h("div", { class: s.pin ? "note" : "alert", text: s.pin ? t.airSeedPin : t.airSeed }));
 
@@ -314,7 +316,7 @@
 			view.status.textContent = t.ready;
 			view.keys.replaceChildren(...[...round[0]].map((k) => h("span", { text: k })));
 			view.bar.style.width = "0";
-			live.append(
+			live.append(...[   // without the optional parts (append would write "null")
 				h("div", { class: "row" },
 					h("button", { class: "btn big", on: { click: () => play(input, s, view) } }, t.play),
 					h("button", { class: "btn ghost big", on: { click: () => { stopPlaying(); view.status.textContent = t.ready; view.bar.style.width = "0"; } } }, t.stop),
@@ -327,7 +329,7 @@
 				input.kind === "seed" ? fingerprintBox(input.entropy, t.fingerprintSend) : null,
 				input.generated ? revealWords(input.entropy) : null,
 				input.kind === "keys" && input.keys.descriptors.length ? field(t.descriptors, readonlyText(input.keys.descriptors.join("\n"))) : null,
-				view.status, h("div", { class: "bar-track" }, view.bar), view.keys);
+				view.status, h("div", { class: "bar-track" }, view.bar), view.keys].filter((e) => e));
 			if (input.kind === "seed" && s.mode === "keypad") {
 				const digits = round[0].slice(1, -1).match(/.{4}/g);
 				live.append(h("div", { class: "hint", text: t.keyByHand }),

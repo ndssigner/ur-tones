@@ -202,13 +202,20 @@ function channel(x, rate, { speakerFc = 900, rt60 = 0.4, wet = 0.6, noise = 0.01
 	const groups = [s.keypad, s.frames[0], p.frames[0]];
 	const expect = [s.entropy, s.ur, p.urs[0]];
 	const decoded = (got) => got.map((g) => g.startsWith("*") ? hex(U.keypadToSeed(g)) : (() => { try { return U.frameToUR(g).ur; } catch (e) { return "error"; } })());
+	check(JSON.stringify(U.PACES) === JSON.stringify({ air: { tone: 80, gap: 80 }, cable: { tone: 40, gap: 20 }, fast: { tone: 30, gap: 10 } }), "the three speeds (SPEC §1.1)");
+	const cable = { speakerFc: 50, rt60: 0, noise: 0.003, fade: 0 };
 	for (const [rate, tone, gap, ch] of [
-		[8000, 40, 20, { speakerFc: 50, rt60: 0, noise: 0.003, fade: 0 }],   // cable, fast
+		[8000, 40, 20, cable],
 		[48000, 50, 50, { speakerFc: 50, rt60: 0, noise: 0.01, fade: 0 }],
 		[8000, 80, 80, { speakerFc: 600, rt60: 0.3, wet: 0.4, noise: 0.005 }], // quiet room
 		[16000, 80, 80, { speakerFc: 900, rt60: 0.4, wet: 0.6, noise: 0.04 }], // noisy room
+		...[8000, 16000, 44100].map((rate) => [rate, 30, 10, cable]),          // fast cable
 	]) {
-		const audio = channel(U.render(groups, rate, tone, gap), rate, ch);
+		// keypad mode never goes at fast cable: its digits repeat
+		const samples = tone === 30 && gap === 10
+			? Float32Array.from([...U.render(groups.slice(0, 1), rate, 80, 80), ...U.render(groups.slice(1), rate, tone, gap)])
+			: U.render(groups, rate, tone, gap);
+		const audio = channel(samples, rate, ch);
 		const got = [];
 		const l = new U.Listener(rate, { onGroup: (g) => got.push(g) });
 		for (let i = 0; i < audio.length; i += 4096) l.push(audio.subarray(i, i + 4096)); // as a microphone

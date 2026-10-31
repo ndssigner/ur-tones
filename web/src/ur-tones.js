@@ -13,6 +13,8 @@ const UrTones = (() => {
 	const LEAD = "CB"; // lead-in: lets the receiver settle; may be lost
 	const SYNC = "AD";
 	const PARITY = 32; // Reed-Solomon parity bytes: repairs 16 wrong bytes
+	// data mode's three speeds, tone and silence in ms (SPEC §1.1); keypad mode always at air
+	const PACES = { air: { tone: 80, gap: 80 }, cable: { tone: 40, gap: 20 }, fast: { tone: 30, gap: 10 } };
 	const KIND_SINGLE = 0, KIND_PART = 1;
 	const UR_TYPES = ["", "crypto-psbt", "psbt", "crypto-seed", "seed", "crypto-account",
 		"account-descriptor", "crypto-output", "output-descriptor", "bytes", "crypto-hdkey", "hdkey"];
@@ -637,7 +639,7 @@ const UrTones = (() => {
 	}
 
 	return {
-		FORMAT_VERSION, KEYS, LEAD, SYNC, PARITY, toTones, fromTones, segment, UR_TYPES, FREQS, DecodeError,
+		FORMAT_VERSION, KEYS, LEAD, SYNC, PARITY, PACES, toTones, fromTones, segment, UR_TYPES, FREQS, DecodeError,
 		crc32, bytewordsMinimal, fromBytewordsMinimal, cborBytes, parseUR, urText, urToFrame, frameToUR,
 		FountainEncoder, FountainDecoder, parsePart, messageToURs, messageFrames, fitsOneFrame, psbtToURs, cborToPsbt,
 		seedToKeypad, keypadToSeed, seedToUR, urToSeed, render, wav, readWav, Listener, listen,
