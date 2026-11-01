@@ -54,7 +54,7 @@ semillas.
 | **Radios** | Ninguna en la v1.3 (la Zero W tiene Wi-Fi/Bluetooth) | Ninguna en la Pico / Pico 2 (las versiones "W" y todos los ESP32 tienen Wi-Fi/Bluetooth: mejor placas sin radio) |
 | **Coste aproximado de las piezas** | ≈ 50–80 USD (placa, pantalla HAT, cámara, microSD, caja) | ≈ 10–20 USD (placa, OLED, botones, jack o micrófono MEMS + amplificador pequeño) |
 | **Consumo** | 5 V, alrededor de 1 W; arranca Linux (decenas de segundos) | Alrededor de 0,1 W, podría ir con pilas AA; lista en un segundo |
-| **Velocidad** | Un QR animado: segundos | Por cable, ≈ 16 tonos/s (una PSBT de 450 bytes en menos de 2 minutos); al aire, 80 + 80 ms por tono (unas 2,7 veces más lento) |
+| **Velocidad** | Un QR animado: segundos | Por cable, ≈ 16 tonos/s (una PSBT de 450 bytes en menos de 2 minutos), o 25 tonos/s por un cable corto hacia un receptor que lo soporte (alrededor de un minuto); al aire, 80 + 80 ms por tono (unas 2,7 veces más lento) |
 | **Quién puede capturar los datos** | Cualquiera con una cámara que vea la pantalla | Por cable, nadie; al aire, cualquier micrófono de la habitación (de ahí el PIN para semillas) |
 | **Meter una semilla** | SeedQR (cámara), o palabra a palabra | Tonos (con PIN opcional), el modo teclado a mano en cualquier teléfono, o palabra a palabra |
 | **Firmware** | Maduro, muy usado, revisado (Python) | Aún no existe (solo la capa de sonido, en C) |

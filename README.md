@@ -45,8 +45,11 @@ signer, the devices it works with, and the backup's limits.
   different seed. Either side can make one up (🎲) for the other to type,
   and both show the seed's fingerprint, so a wrong PIN shows up at once.
   Transactions are not encrypted (they give no access to funds).
-- **Pace**: by cable, 40 ms tones with 20 ms of silence (about 16 tones per
-  second: a 450-byte PSBT in under 2 minutes); through the air, 80 + 80 ms.
+- **Speed**: three, by the path ([SPEC.md §1.1](SPEC.md#11-timing)). *Cable*:
+  40 ms tones with 20 ms of silence (about 16 tones per second: a 450-byte
+  PSBT in under 2 minutes). *Fast cable*: 30 + 10 ms (25 tones per second,
+  about a minute for the same PSBT), over a short cable to a receiver that
+  supports it. *Air*: 80 + 80 ms, for loudspeakers in a room.
 - **Cables**: which ones, levels, and the Nintendo DSi's odd socket: see
   [SPEC.md §5](SPEC.md#5-cables).
 

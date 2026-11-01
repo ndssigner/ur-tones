@@ -52,7 +52,7 @@ cassette as tones. Here, the "programs" are PSBTs, xpubs and seeds.
 | **Radios** | None on the v1.3 (the Zero W has Wi-Fi/Bluetooth) | None on the Pico / Pico 2 (the "W" versions and every ESP32 have Wi-Fi/Bluetooth: prefer boards without) |
 | **Approximate cost of parts** | ≈ 50–80 USD (board, screen HAT, camera, microSD, case) | ≈ 10–20 USD (board, OLED, buttons, jack or MEMS microphone + small amplifier) |
 | **Power** | 5 V, around 1 W; boots Linux (tens of seconds) | Around 0.1 W, could run on AA batteries; ready in about a second |
-| **Speed** | An animated QR code: seconds | By cable, ≈ 16 tones/s (a 450-byte PSBT in under 2 minutes); through the air, 80 + 80 ms per tone (about 2.7× slower) |
+| **Speed** | An animated QR code: seconds | By cable, ≈ 16 tones/s (a 450-byte PSBT in under 2 minutes), or 25 tones/s over a short cable to a receiver that supports it (about a minute); through the air, 80 + 80 ms per tone (about 2.7× slower) |
 | **Who can capture the data** | Anyone with a camera in sight of the screen | By cable, nobody; through the air, any microphone in the room (hence the PIN for seeds) |
 | **Entering a seed** | SeedQR (camera), or word by word | Tones (with an optional PIN), the keypad mode by hand on any phone, or word by word |
 | **Firmware** | Mature, widely used, reviewed (Python) | Does not exist yet (only the sound layer, in C) |

@@ -694,7 +694,7 @@
 	function go(screen) { stopPlaying(); stopMic(); st.screen = screen; render(); scrollTo(0, 0); }
 	// the repository, and the sister projects (plain links: the page itself still connects nowhere)
 	const REPO_URL = "https://github.com/ndssigner/ur-tones";
-	const SIBLINGS = [["NDS-Signer", "https://github.com/ndssigner/nds-signer", "sibNds"], ["Seedcraft", "https://github.com/ndssigner/seedcraft", "sibSeedcraft"]];
+	const SIBLINGS = [["DTMF-Signer", "https://github.com/ndssigner/dtmf-signer", "sibDtmf"], ["NDS-Signer", "https://github.com/ndssigner/nds-signer", "sibNds"], ["Seedcraft", "https://github.com/ndssigner/seedcraft", "sibSeedcraft"]];
 	const link = (href, text, tip) => h("a", { href, target: "_blank", rel: "noopener noreferrer", title: tip || null }, text);
 	function links() {
 		const t = T();
