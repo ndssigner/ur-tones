@@ -148,9 +148,9 @@ the bytewords' CRC-32:
 So a receiver rebuilds the exact UR text — `ur:`, the type, the sequence
 numbers read from the part's CBOR, and the body in minimal bytewords with
 its CRC-32 — and hands it to any UR decoder. Messages too big for one frame
-are sent as multi-part URs, with UR's fountain codes: the sender plays parts
-in a loop, mixed parts included, until the receiver has enough; a lost frame
-costs one frame, not the whole message. Recommended fragment length: 100
+are sent as multi-part URs, with UR's fountain codes: the sender plays the
+parts once, or in a loop, mixed parts included, until the receiver has
+enough; a lost frame costs one frame, not the whole message. Recommended fragment length: 100
 bytes (about 19 s per frame by cable, 51 s through the air).
 
 A seed goes as `crypto-seed` or `seed`.

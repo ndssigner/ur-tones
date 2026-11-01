@@ -10,7 +10,7 @@
 		lang: (navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en",
 		screen: "intro",
 		// generated: a new seed's entropy (never put in the text box, where it would show)
-		send: { text: "", mode: "data", pin: "", made: "", pace: "cable", keyFormat: "current", psbtFormat: "crypto-psbt", generated: null, gen: { open: false, words: 12, source: "browser", rolls: "" } },
+		send: { text: "", mode: "data", pin: "", made: "", pace: "cable", loop: false, keyFormat: "current", psbtFormat: "crypto-psbt", generated: null, gen: { open: false, words: 12, source: "browser", rolls: "" } },
 	};
 	const T = () => UR_TONES_TEXT[st.lang];
 	// SPEC §1.1. Keypad mode's digits repeat: never faster than 80 + 80 ms
@@ -186,6 +186,12 @@
 		let n = 0;
 		const next = () => {
 			if (!player.on) return;
+			if (n === total && !sendSt.loop) {   // once: one round, then stop
+				stopPlaying();
+				view.status.textContent = T().sent;
+				view.bar.style.width = "100%";
+				return;
+			}
 			const frame = gen.next().value;
 			n++;
 			const rate = player.ctx.sampleRate;
@@ -198,7 +204,7 @@
 			const t0 = player.ctx.currentTime + 0.05;
 			src.start(t0);
 			player.source = src;
-			view.status.textContent = T().playing(((n - 1) % total) + 1, total);
+			view.status.textContent = T().playing(((n - 1) % total) + 1, total, sendSt.loop);
 			const spans = [...frame].map((k) => h("span", { text: k }));
 			view.keys.replaceChildren(...spans);
 			let last = -1;
@@ -339,6 +345,8 @@
 					field(t.speed, seg([["air", t.speedAir, t.speedAirHelp], ["cable", t.speedCable, t.speedCableHelp], ["fast", t.speedFast, t.speedFastHelp]],
 						s.pace, again((v) => { s.pace = v; }))),
 					field(t.errorCorrection, h("div", { class: "hint", text: `${t.ecFull} — ${t.ecFullHelp}` })));
+			options.append(field(t.repeat, seg([["once", t.repeatOnce, t.repeatOnceHelp], ["loop", t.repeatLoop, t.repeatLoopHelp]],
+				s.loop ? "loop" : "once", again((v) => { s.loop = v === "loop"; }))));
 			if (input.kind === "seed" && s.pace === "air" && s.mode !== "keypad")
 				options.append(h("div", { class: s.pin ? "note" : "alert", text: s.pin ? t.airSeedPin : t.airSeed }));
 
