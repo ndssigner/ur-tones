@@ -32,10 +32,11 @@
 		return e;
 	}
 	const cleanPin = (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
-	// A seed's fingerprint (about half a second: PBKDF2 and secp256k1), kept per seed
+	// A seed's fingerprint (about half a second: PBKDF2 and secp256k1), kept per seed:
+	// under the seed's SHA-256, never the seed itself, and emptied by Clear
 	const fingerprints = new Map();
 	function fingerprintOf(entropy) {
-		const key = Array.from(entropy, (b) => b.toString(16).padStart(2, "0")).join("");
+		const key = Array.from(S.sha256(entropy), (b) => b.toString(16).padStart(2, "0")).join("");
 		if (!fingerprints.has(key)) fingerprints.set(key, S.fingerprint(entropy));
 		return fingerprints.get(key);
 	}
@@ -264,8 +265,9 @@
 		function clearSend() {
 			if (!(s.text || s.generated || s.pin || s.made || s.gen.rolls)) return;
 			const parsed = s.text && parseInput(s.text, s.keyFormat, s.psbtFormat);
-			const seed = !!s.generated || (parsed && parsed.kind === "seed");
+			const seed = !!s.generated || (parsed && (parsed.kind === "seed" || ["crypto-seed", "seed"].includes(parsed.type)));
 			stopPlaying();
+			fingerprints.clear();
 			if (s.generated) s.generated.fill(0);
 			Object.assign(s, { text: "", pin: "", made: "", generated: null });
 			Object.assign(s.gen, { open: false, rolls: "" });
@@ -568,6 +570,7 @@
 		function clearListen() {
 			const seed = !!L.entropy;
 			if (L.entropy) L.entropy.fill(0);
+			fingerprints.clear();
 			stopMic();
 			Object.assign(rec, { pend: [], chunks: [], n: 0 });
 			render();
