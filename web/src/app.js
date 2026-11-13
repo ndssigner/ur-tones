@@ -235,20 +235,20 @@
 	const panel = (...children) => h("section", { class: "panel" }, ...children);
 
 	// ---- clearing a screen -----------------------------------------------
-	// Esc runs the current screen's Clear; render() resets it, each screen sets its own.
-	let onEscape = null;
+	// Esc runs the current screen's Clear; render() resets both, each screen sets its own.
+	// showCleared writes a line in the screen's own status place: nothing moves.
+	let onEscape = null, showCleared = null;
 	addEventListener("keydown", (e) => { if (e.key === "Escape" && onEscape) onEscape(); });
-	// After Clear: the screen is drawn again, empty. For a seed, the clipboard may still
-	// hold it: try to empty it, and say whether the browser let the page do so.
+	// After Clear: the screen is drawn again, empty, and says so. For a seed, the clipboard
+	// may still hold it: try to empty it, and say whether the browser let the page do so.
 	async function cleared(seed) {
-		const t = T();
-		let msg = t.clearHelp;
-		if (seed) {
-			try { await navigator.clipboard.writeText(""); msg = t.clipboardCleared + " " + msg; }
-			catch (e) { msg = t.clipboardNotCleared + " " + msg; }
-		}
-		const screen = $("app").firstChild;
-		if (screen) screen.prepend(h("div", { class: "note", text: msg }));
+		const t = T(), show = showCleared;
+		if (!show) return;
+		show(t.cleared);
+		if (!seed) return;
+		let done = t.clipboardNotCleared;
+		try { await navigator.clipboard.writeText(""); done = t.clipboardCleared; } catch (e) { /* refused */ }
+		if (show === showCleared) show(t.cleared + " " + done);
 	}
 
 	// ---- send ---------------------------------------------------------
@@ -262,8 +262,9 @@
 		area.value = s.text;
 		const genBtn = h("button", { class: "btn ghost small" });
 		// Clear: everything typed, made up or generated here, at once (also Esc)
+		const canClear = () => !!(s.text || s.generated || s.pin || s.made || s.gen.rolls);
 		function clearSend() {
-			if (!(s.text || s.generated || s.pin || s.made || s.gen.rolls)) return;
+			if (!canClear()) return;
 			const parsed = s.text && parseInput(s.text, s.keyFormat, s.psbtFormat);
 			const seed = !!s.generated || (parsed && (parsed.kind === "seed" || ["crypto-seed", "seed"].includes(parsed.type)));
 			stopPlaying();
@@ -276,6 +277,12 @@
 		}
 		onEscape = clearSend;
 		const clearBtn = h("button", { class: "btn ghost small", title: t.clearHelp, on: { click: clearSend } }, t.clear);
+		// said where the input's own description goes, until something is typed again;
+		// with a mouse, the input is ready for the next paste (no keyboard popping up on a phone)
+		showCleared = (msg) => {
+			info.className = "detected"; info.textContent = msg;
+			if (document.activeElement === document.body && matchMedia("(pointer: fine)").matches) area.focus();
+		};
 		// a new seed: from the browser's random numbers, from dice, or both (SPEC: diceEntropy)
 		function generator() {
 			const g = s.gen, need = S.DICE_ROLLS[g.words], dice = g.source !== "browser";
@@ -289,7 +296,7 @@
 			const show = () => { count.textContent = t.genRollsCount(g.rolls.length, need); make.disabled = dice && g.rolls.length !== need; };
 			// the rolls are the seed: masked, like a password, and forgotten once used
 			const rolls = h("input", { class: "pin rolls", type: "password", inputmode: "numeric", autocomplete: "off", spellcheck: "false", placeholder: t.genRollsHint,
-				on: { input: (e) => { g.rolls = e.target.value.replace(/[^1-6]/g, ""); e.target.value = g.rolls; show(); } } });
+				on: { input: (e) => { g.rolls = e.target.value.replace(/[^1-6]/g, ""); e.target.value = g.rolls; show(); clearBtn.disabled = !canClear(); } } });
 			rolls.value = g.rolls;
 			show();
 			return h("div", { class: "stack" },
@@ -311,7 +318,7 @@
 			stopPlaying();
 			const input = s.generated ? { kind: "seed", entropy: s.generated, words: s.generated.length * 3 / 4, generated: true } : parseInput(s.text, s.keyFormat, s.psbtFormat);
 			area.disabled = !!s.generated;
-			clearBtn.hidden = !(s.text || s.generated || s.pin || s.made);
+			clearBtn.disabled = !canClear();
 			area.placeholder = s.generated ? t.genHidden : PLACEHOLDER;
 			genBtn.textContent = s.generated ? t.genDiscard : "🎲 " + t.newSeed;
 			genBtn.onclick = s.generated ? () => { s.generated = null; update(); }
@@ -512,6 +519,7 @@
 			},
 		});
 		function reset() {
+			if (!mic.stream) micState.textContent = t.idle;
 			L.decoder = null; L.done = false; result.replaceChildren(); list.replaceChildren(); heard.textContent = "";
 			progressText.textContent = ""; progress.style.width = "0"; err.replaceChildren();
 		}
@@ -567,7 +575,9 @@
 		} } });
 
 		// Clear: the seed received, the PIN, what was heard and recorded (also Esc)
-		function clearListen() {
+		function clearListen(e) {
+			// Esc with nothing here: nothing to do (the button always answers)
+			if (!e && !(L.entropy || L.pin || L.made || L.decoder || list.children.length || heard.textContent || rec.n || mic.stream)) return;
 			const seed = !!L.entropy;
 			if (L.entropy) L.entropy.fill(0);
 			fingerprints.clear();
@@ -576,7 +586,8 @@
 			render();
 			cleared(seed);
 		}
-		onEscape = clearListen;
+		onEscape = () => clearListen();
+		showCleared = (msg) => { micState.textContent = msg; };
 
 		return h("div", { class: "tool" },
 			panel(
@@ -716,7 +727,7 @@
 	}
 	function render() {
 		shell(); online(); links();
-		onEscape = null;
+		onEscape = showCleared = null;
 		$("app").replaceChildren(({
 			intro, send: sendScreen, listen: listenScreen,
 			cables: textScreen(() => T().cables, () => T().cableText),
