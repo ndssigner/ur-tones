@@ -33,6 +33,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+html { scrollbar-gutter: stable; }   /* the page does not shift sideways when it grows past the window */
 body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--sans); }
 button, input, textarea, select { font: inherit; color: inherit; }
 .hidden { display: none !important; }
@@ -76,7 +77,9 @@ header.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: c
 	.net-why { left: 16px; right: 16px; width: auto; top: calc(100% + 4px); }
 	.brand { flex: 1; }
 	.brand small { display: none; }
-	.tabs { order: 3; flex-basis: 100%; height: 40px; overflow-x: auto; }
+	/* sideways only, with no scrollbar drawn: the active tab's underline hangs 1px below */
+	.tabs { order: 3; flex-basis: 100%; height: 40px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding-bottom: 1px; }
+	.tabs::-webkit-scrollbar { display: none; }
 	.tabs button { flex: 1 0 auto; padding: 0 6px; white-space: nowrap; }
 }
 @media (max-width: 640px) { #gh { display: none; } .brand { min-width: 96px; } }
@@ -117,7 +120,7 @@ footer a:hover, footer button:hover { color: var(--fg); }
 .status.live { color: var(--ok); }
 /* "ready": a small lamp, as on a line that is open */
 .status.live::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 7px; vertical-align: 1px; }
-.detected { font-size: 13px; color: var(--muted); flex: 1; }
+.detected { font-size: 13px; color: var(--muted); min-height: 1.5em; }
 .detected.ok { color: var(--ok); }
 .detected.bad { color: var(--bad); }
 .empty { color: var(--muted); padding: 28px 8px; text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; }

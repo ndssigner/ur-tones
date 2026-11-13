@@ -276,7 +276,7 @@
 			cleared(seed);
 		}
 		onEscape = clearSend;
-		const clearBtn = h("button", { class: "btn ghost small", title: t.clearHelp, on: { click: clearSend } }, t.clear);
+		const clearBtn = h("button", { class: "btn ghost small push", title: t.clearHelp, on: { click: clearSend } }, t.clear);
 		// said where the input's own description goes, until something is typed again;
 		// with a mouse, the input is ready for the next paste (no keyboard popping up on a phone)
 		showCleared = (msg) => {
@@ -330,7 +330,12 @@
 				: input.kind === "keys" ? t.detected.keys(input.keys.what, input.type, input.parts)
 				: input.generated ? t.detected.newSeed(input.words)
 				: input.kind === "seed" ? t.detected.seed(input.words) : t.detected.bad + (input.why ? ` (${input.why})` : "");
+			// the options are drawn again: the keyboard's focus goes back to the same control
+			const controls = () => [...options.querySelectorAll("button, input")];
+			const at = controls().indexOf(document.activeElement), label = at < 0 ? "" : document.activeElement.textContent;
+			const refocus = () => { const c = controls()[at]; if (c && c.textContent === label) c.focus(); };
 			options.replaceChildren(); live.replaceChildren();
+			if (at >= 0) setTimeout(refocus, 0);
 			if (!input || input.kind === "bad") {
 				if (!input && s.gen.open) options.append(generator());
 				live.append(h("div", { class: "empty" }, h("div", { text: t.inputHint }),
@@ -389,7 +394,8 @@
 		update();
 		return h("div", { class: "tool" },
 			panel(field(t.input, area,
-				h("div", { class: "row" }, info, h("button", { class: "btn ghost small push", on: { click: () => fileInput.click() } }, t.openFile), genBtn, clearBtn, fileInput)),
+				info,
+				h("div", { class: "row" }, h("button", { class: "btn ghost small", on: { click: () => fileInput.click() } }, t.openFile), genBtn, clearBtn, fileInput)),
 				options),
 			panel(live));
 	}
