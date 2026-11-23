@@ -49,7 +49,7 @@ jobs:
       - name: Build the web tool
         run: node web/build.mjs
       - name: The site for GitHub Pages
-        run: mkdir site && cp dist/ur-tones.html site/index.html
+        run: mkdir site && cp dist/ur-tones.html site/index.html && cp docs/images/og.png site/
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
