@@ -158,6 +158,20 @@ Recordings help most: if the tool misses tones in your setup, record what
 it hears (*Listen → Record what is heard*) with a **test** seed or a testnet
 PSBT, and attach the WAV to an issue.
 
+## Used by
+
+- **[DTMF-Signer](https://github.com/ndssigner/dtmf-signer)**, an air-gapped
+  signer that talks only in tones. Its cheapest build, the
+  [Phone Exchange (PEX)](https://ndssigner.github.io/dtmf-signer/en/pex/), is
+  a Raspberry Pi Pico and an old tone telephone: no screen, no buttons. It
+  uses ur-tones end to end over the phone line: seeds arrive through the
+  handset (encrypted with a PIN) or are typed on the keypad, PSBTs arrive
+  through the handset microphone, and the signed PSBT and the account go
+  back as data tones in the earpiece, ready for the [web tool](#web-tool).
+
+Using ur-tones in your project? Open an issue or a pull request to add it
+here.
+
 ## Contributing
 
 ur-tones aims to be a standard way for air-gapped Bitcoin tools to talk over
